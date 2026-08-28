@@ -23,3 +23,14 @@ The application should keep its simplest mode permanently useful: plain text can
 7. [A6 — Add persistence, parity checks, and finish the migration](https://github.com/moritzbrantner/speedreader/issues/7)
 
 Start with A0. Do not pull later OCR, persistence, or sync concerns into the foundation prematurely.
+
+## Local development
+
+Install JavaScript dependencies with `bun install`, then run `bun run ci` for the
+full A0 verification gate. The GitHub Actions workflow has the same commands and
+can be exercised locally with `act -j verify`.
+
+The platform-neutral reader lives in `packages/speed-reading`. Its React hook is
+a binding only; web and Expo provide their own UI while desktop is a Tauri shell
+around the static web export. Native packaging is deliberately not a root A0
+gate; A4 and A5 add their supported-host build checks.

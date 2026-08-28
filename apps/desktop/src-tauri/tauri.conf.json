@@ -1,0 +1,17 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "speedreader",
+  "version": "0.0.0",
+  "identifier": "com.moritzbrantner.speedreader",
+  "build": {
+    "beforeDevCommand": "bun --cwd ../web dev",
+    "beforeBuildCommand": "bun --cwd ../web build",
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "../../web/out"
+  },
+  "app": {
+    "windows": [{ "title": "speedreader", "width": 900, "height": 600 }],
+    "security": { "csp": null }
+  },
+  "bundle": { "active": true, "targets": "all" }
+}

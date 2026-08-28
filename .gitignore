@@ -1,3 +1,12 @@
 
 # Local agent-loop run evidence
 .agent-loop/runs/
+
+# Generated builds and local package installs
+.next/
+.turbo/
+node_modules/
+out/
+dist/
+target/
+*.tsbuildinfo

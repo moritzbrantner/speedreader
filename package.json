@@ -1,0 +1,19 @@
+{
+  "name": "speedreader",
+  "private": true,
+  "packageManager": "bun@1.4.0",
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "build": "turbo run build",
+    "ci": "bun run lint && bun run typecheck && bun run test && bun run build && bun run cargo:check",
+    "cargo:check": "cargo check --workspace",
+    "lint": "turbo run lint",
+    "test": "turbo run test && bun test tests",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "turbo": "^2.5.3",
+    "typescript": "^5.8.3"
+  }
+}
