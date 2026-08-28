@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   type ReaderChunk,
   type ReaderProgress,
   type ReaderSettings,
+  millisecondsForChunk,
 } from "./core";
 import {
   createReadingSession,
@@ -42,24 +43,46 @@ export function useReadingSession(options: UseReadingSessionOptions): ReadingSes
     options.initialSession ?? createReadingSession(""),
   );
   const session = options.session ?? uncontrolledSession;
+  const snapshot = snapshotFor(session);
   const dispatch = useCallback((event: ReadingSessionEvent) => {
     const nextSession = transitionReadingSession(session, event);
     if (options.session === undefined) setUncontrolledSession(nextSession);
     options.onSessionChange?.(nextSession);
   }, [options, session]);
 
-  return { dispatch, snapshot: snapshotFor(session) };
+  useEffect(() => {
+    const { currentChunk, session: currentSession } = snapshot;
+    if (currentSession.status !== "playing" || currentChunk === undefined) return;
+
+    const timer = setTimeout(
+      () => dispatch({ type: "step", direction: 1 }),
+      millisecondsForChunk(currentChunk, currentSession.settings.wordsPerMinute),
+    );
+    return () => clearTimeout(timer);
+  }, [dispatch, snapshot]);
+
+  return { dispatch, snapshot };
 }
 
 export function useSpeedReader(
   text: string,
   initialSettings: Partial<ReaderSettings> = {},
 ): SpeedReaderController {
+  const { chunkSize, segmentation, wordsPerMinute } = initialSettings;
   const initialSession = useMemo(
-    () => createReadingSession(text, initialSettings),
-    [text, initialSettings],
+    () => createReadingSession(text, { chunkSize, segmentation, wordsPerMinute }),
+    [chunkSize, segmentation, text, wordsPerMinute],
   );
-  const { dispatch, snapshot } = useReadingSession({ initialSession });
+  const [session, setSession] = useState<ReadingSession>(initialSession);
+
+  useEffect(() => {
+    setSession(initialSession);
+  }, [initialSession]);
+
+  const { dispatch, snapshot } = useReadingSession({
+    session,
+    onSessionChange: setSession,
+  });
 
   const seek = useCallback((chunkIndex: number) => dispatch({ type: "seek", chunkIndex }), [dispatch]);
 

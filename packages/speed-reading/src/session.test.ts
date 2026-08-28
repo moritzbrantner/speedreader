@@ -39,6 +39,21 @@ test("session state is stable and serializable", () => {
   expect(parseReadingSession(serializeReadingSession(session))).toEqual(session);
 });
 
+test("empty, Unicode, and long-token input retain deterministic session semantics", () => {
+  expect(createReadingSession("")).toMatchObject({ chunkIndex: 0, status: "complete" });
+
+  const session = createReadingSession("naïve 東京 extraordinarilylongword", { chunkSize: 2 });
+  const firstStep = transitionReadingSession(
+    transitionReadingSession(session, { type: "play" }),
+    { type: "step", direction: 1 },
+  );
+  expect(firstStep).toMatchObject({ chunkIndex: 1, status: "playing" });
+  expect(transitionReadingSession(firstStep, { type: "step", direction: 1 })).toMatchObject({
+    chunkIndex: 2,
+    status: "complete",
+  });
+});
+
 test("chunk policy changes reset safely while pacing changes preserve position", () => {
   const playing = transitionReadingSession(createReadingSession("one two three"), { type: "play" });
   const progressed = transitionReadingSession(playing, { type: "step", direction: 1 });
