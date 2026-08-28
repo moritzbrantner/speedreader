@@ -68,13 +68,48 @@ impl RequestOcr {
 
 impl CanonicalOcr for RequestOcr {
     fn recognize_page(&self, page_number: u32) -> Result<String, ExtractionError> {
-        self.0.get(&page_number).cloned().ok_or_else(|| ExtractionError::Ocr {
-            page_number,
-            message: "no canonical OCR result was supplied by the configured adapter".into(),
-        })
+        self.0
+            .get(&page_number)
+            .cloned()
+            .ok_or_else(|| ExtractionError::Ocr {
+                page_number,
+                message: "no canonical OCR result was supplied by the configured adapter".into(),
+            })
     }
 
     fn preset(&self) -> OcrPreset {
         OcrPreset::TrOcrBasePrintedOnnx
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn extraction_endpoint_returns_the_reading_document_contract() {
+        let Json(document) = extract(
+            State(AppState),
+            Json(ExtractRequest {
+                pages: vec![
+                    ExtractRequestPage {
+                        page_number: 1,
+                        embedded_text: "native text".into(),
+                        ocr_text: None,
+                    },
+                    ExtractRequestPage {
+                        page_number: 2,
+                        embedded_text: String::new(),
+                        ocr_text: Some("scanned text".into()),
+                    },
+                ],
+            }),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(document.version, 1);
+        assert_eq!(document.text, "native text\n\nscanned text");
+        assert_eq!(document.pages.len(), 2);
     }
 }

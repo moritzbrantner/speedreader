@@ -80,6 +80,17 @@ pub fn inspect_pdf(pdf: &[u8]) -> Result<Vec<PageInput>, ExtractionError> {
         .collect()
 }
 
+/// Extract a reading document directly from PDF bytes.
+///
+/// The caller owns PDF page rendering and supplies the canonical OCR adapter;
+/// embedded text stays on the deterministic, dependency-light path.
+pub fn extract_pdf(
+    pdf: &[u8],
+    ocr: &impl CanonicalOcr,
+) -> Result<ReadingDocument, ExtractionError> {
+    extract_pages(inspect_pdf(pdf)?, ocr)
+}
+
 pub fn extract_pages(
     pages: impl IntoIterator<Item = PageInput>,
     ocr: &impl CanonicalOcr,

@@ -1,7 +1,8 @@
 use document_extraction::{
-    extract_pages, CanonicalOcr, ExtractionError, ExtractionProvenance, PageInput,
+    extract_pages, extract_pdf, CanonicalOcr, ExtractionError, ExtractionProvenance, PageInput,
 };
 use image_analysis_ocr::OcrPreset;
+use lopdf::{dictionary, Document, Object, Stream};
 
 struct FixtureOcr;
 
@@ -18,20 +19,56 @@ impl CanonicalOcr for FixtureOcr {
 #[test]
 fn uses_embedded_text_without_ocr() {
     let document = extract_pages(
-        [PageInput { page_number: 1, embedded_text: "Hello   text PDF".into() }],
+        [PageInput {
+            page_number: 1,
+            embedded_text: "Hello   text PDF".into(),
+        }],
         &FixtureOcr,
     )
     .unwrap();
     assert_eq!(document.text, "Hello text PDF");
-    assert_eq!(document.pages[0].provenance, ExtractionProvenance::EmbeddedText);
+    assert_eq!(
+        document.pages[0].provenance,
+        ExtractionProvenance::EmbeddedText
+    );
+}
+
+#[test]
+fn extracts_a_text_layer_pdf_without_invoking_ocr() {
+    let document = extract_pdf(&pdf_with_pages(&[Some("Hello text PDF")]), &FixtureOcr).unwrap();
+
+    assert_eq!(document.text, "Hello text PDF");
+    assert_eq!(
+        document.pages[0].provenance,
+        ExtractionProvenance::EmbeddedText
+    );
+}
+
+#[test]
+fn extracts_a_scanned_pdf_through_the_canonical_ocr_adapter() {
+    let document = extract_pdf(&pdf_with_pages(&[None]), &FixtureOcr).unwrap();
+
+    assert_eq!(document.text, "scanned page 1");
+    assert_eq!(
+        document.pages[0].provenance,
+        ExtractionProvenance::CanonicalOcr {
+            preset: "trocr-base-printed-onnx".into()
+        }
+    );
 }
 
 #[test]
 fn uses_canonical_ocr_for_scanned_pages_and_keeps_page_provenance() {
     let document = extract_pages(
         [
-            PageInput { page_number: 1, embedded_text: "native page".into() },
-            PageInput { page_number: 2, embedded_text: String::new() },
+            PageInput {
+                page_number: 1,
+                embedded_text: "native page".into(),
+            },
+            PageInput {
+                page_number: 2,
+                embedded_text: String::new(),
+            },
         ],
         &FixtureOcr,
     )
@@ -39,7 +76,9 @@ fn uses_canonical_ocr_for_scanned_pages_and_keeps_page_provenance() {
     assert_eq!(document.pages[1].text, "scanned page 2");
     assert_eq!(
         document.pages[1].provenance,
-        ExtractionProvenance::CanonicalOcr { preset: "trocr-base-printed-onnx".into() }
+        ExtractionProvenance::CanonicalOcr {
+            preset: "trocr-base-printed-onnx".into()
+        }
     );
 }
 
@@ -47,12 +86,64 @@ fn uses_canonical_ocr_for_scanned_pages_and_keeps_page_provenance() {
 fn removes_recurring_margins_and_page_numbers_deterministically() {
     let document = extract_pages(
         [
-            PageInput { page_number: 1, embedded_text: "Magazine\nFirst body\n1".into() },
-            PageInput { page_number: 2, embedded_text: "Magazine\nSecond body\n2".into() },
+            PageInput {
+                page_number: 1,
+                embedded_text: "Magazine\nFirst body\n1".into(),
+            },
+            PageInput {
+                page_number: 2,
+                embedded_text: "Magazine\nSecond body\n2".into(),
+            },
         ],
         &FixtureOcr,
     )
     .unwrap();
     assert_eq!(document.text, "First body\n\nSecond body");
     assert_eq!(document.diagnostics.len(), 3);
+}
+
+fn pdf_with_pages(texts: &[Option<&str>]) -> Vec<u8> {
+    let mut document = Document::with_version("1.5");
+    let pages_id = document.new_object_id();
+    let font_id = document.add_object(dictionary! {
+        "Type" => "Font",
+        "Subtype" => "Type1",
+        "BaseFont" => "Helvetica",
+    });
+    let page_ids = texts
+        .iter()
+        .map(|text| {
+            let content_id = text.map(|text| {
+                document.add_object(Stream::new(
+                    dictionary! {},
+                    format!("BT /F1 12 Tf 72 720 Td ({text}) Tj ET").into_bytes(),
+                ))
+            });
+            let mut page = dictionary! {
+                "Type" => "Page",
+                "Parent" => pages_id,
+                "MediaBox" => vec![0.into(), 0.into(), 612.into(), 792.into()],
+                "Resources" => dictionary! { "Font" => dictionary! { "F1" => font_id } },
+            };
+            if let Some(content_id) = content_id {
+                page.set("Contents", content_id);
+            }
+            document.add_object(page)
+        })
+        .collect::<Vec<_>>();
+    document.objects.insert(
+        pages_id,
+        dictionary! {
+            "Type" => "Pages",
+            "Kids" => page_ids.into_iter().map(Object::Reference).collect::<Vec<_>>(),
+            "Count" => texts.len() as i64,
+        }
+        .into(),
+    );
+    let catalog_id = document.add_object(dictionary! { "Type" => "Catalog", "Pages" => pages_id });
+    document.trailer.set("Root", catalog_id);
+
+    let mut pdf = Vec::new();
+    document.save_to(&mut pdf).unwrap();
+    pdf
 }
