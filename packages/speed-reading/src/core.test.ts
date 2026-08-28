@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { chunkText, millisecondsPerChunk, pivotIndex, progressFor } from "./core";
+import {
+  chunkText,
+  millisecondsForChunk,
+  millisecondsPerChunk,
+  pivotIndex,
+  progressFor,
+  segmentsFromText,
+} from "./core";
 
 describe("chunkText", () => {
   test("normalizes whitespace and retains deterministic chunk order", () => {
@@ -22,6 +29,12 @@ test("pivot uses a stable optimal-recognition-point approximation", () => {
 
 test("pacing scales with the number of words in a chunk", () => {
   expect(millisecondsPerChunk(300, 2)).toBe(400);
+});
+
+test("punctuation-aware pacing keeps the whitespace path available", () => {
+  const [chunk] = chunkText("Stop!", 1);
+  expect(millisecondsForChunk(chunk, 300)).toBe(320);
+  expect(segmentsFromText("hello, world!", "punctuation")).toEqual(["hello,", "world!"]);
 });
 
 test("progress clamps seeks and marks completion", () => {
