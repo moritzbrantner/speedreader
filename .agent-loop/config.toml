@@ -10,7 +10,7 @@ max_duration_seconds = 7200
 [providers.codex]
 executable = "codex"
 reasoning_effort = "high"
-sandbox = "workspace-write"
+sandbox = "danger-full-access"
 approval_policy = "never"
 
 [providers.claude]
