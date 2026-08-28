@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 
-use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
+use axum::{body::Bytes, extract::State, http::StatusCode, routing::post, Json, Router};
 use document_extraction::{
-    extract_pages, CanonicalOcr, ExtractionError, PageInput, ReadingDocument,
+    extract_pages, extract_pdf as extract_pdf_document, CanonicalOcr, ExtractionError, PageInput,
+    ReadingDocument,
 };
 use image_analysis_ocr::OcrPreset;
 use serde::Deserialize;
@@ -28,6 +29,7 @@ struct ExtractRequestPage {
 async fn main() {
     let app = Router::new()
         .route("/extract", post(extract))
+        .route("/extract/pdf", post(extract_pdf))
         .with_state(AppState);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3001")
         .await
@@ -53,6 +55,15 @@ async fn extract(
     .map_err(|error| (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()))
 }
 
+async fn extract_pdf(
+    State(_state): State<AppState>,
+    pdf: Bytes,
+) -> Result<Json<ReadingDocument>, (StatusCode, String)> {
+    extract_pdf_document(&pdf, &UnavailablePdfOcr)
+        .map(Json)
+        .map_err(|error| (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()))
+}
+
 struct RequestOcr(BTreeMap<u32, String>);
 
 impl RequestOcr {
@@ -75,6 +86,21 @@ impl CanonicalOcr for RequestOcr {
                 page_number,
                 message: "no canonical OCR result was supplied by the configured adapter".into(),
             })
+    }
+
+    fn preset(&self) -> OcrPreset {
+        OcrPreset::TrOcrBasePrintedOnnx
+    }
+}
+
+struct UnavailablePdfOcr;
+
+impl CanonicalOcr for UnavailablePdfOcr {
+    fn recognize_page(&self, page_number: u32) -> Result<String, ExtractionError> {
+        Err(ExtractionError::Ocr {
+            page_number,
+            message: "PDF OCR requires a configured page-rendering adapter".into(),
+        })
     }
 
     fn preset(&self) -> OcrPreset {
