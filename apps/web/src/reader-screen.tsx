@@ -5,15 +5,26 @@ import { useSpeedReader } from "@moritzbrantner/speed-reading/react";
 import { readerFixture } from "@moritzbrantner/speed-reading/fixture";
 
 import { extractPdfDocument, type ExtractionResult } from "./extraction";
+import {
+  isDesktopShell,
+  openDesktopDocument,
+  type DesktopExtractionProgress,
+} from "./desktop-extraction";
 
 export function ReaderScreen() {
   const [text, setText] = useState(readerFixture);
   const [extraction, setExtraction] = useState<ExtractionResult | undefined>();
+  const [desktopAvailable, setDesktopAvailable] = useState(false);
+  const [desktopProgress, setDesktopProgress] = useState<DesktopExtractionProgress | undefined>();
   const reader = useSpeedReader(text);
   const toggle = useCallback(() => {
     if (reader.isPlaying) reader.pause();
     else reader.play();
   }, [reader]);
+
+  useEffect(() => {
+    setDesktopAvailable(isDesktopShell());
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -36,12 +47,29 @@ export function ReaderScreen() {
     if (result.ok) setText(result.document.text);
   };
 
+  const openNativeDocument = async () => {
+    setExtraction(undefined);
+    const result = await openDesktopDocument(setDesktopProgress);
+    setDesktopProgress(undefined);
+    if (result.status === "opened") {
+      setText(result.document.text);
+      setExtraction({ ok: true, document: result.document });
+    } else if (result.status === "error") {
+      setExtraction({ ok: false, message: result.message });
+    }
+  };
+
   return (
     <main style={{ display: "grid", gap: 24, margin: "auto", maxWidth: 960, minHeight: "100dvh", padding: 24 }}>
       <header>
         <h1>Speedreader</h1>
         <p>Paste text to read locally, or import a PDF through a configured extraction service.</p>
       </header>
+      {desktopAvailable ? (
+        <button type="button" onClick={() => void openNativeDocument()}>
+          Open local text or PDF
+        </button>
+      ) : null}
       <label style={{ display: "grid", gap: 8 }}>
         Source text
         <textarea value={text} onChange={(event) => setText(event.target.value)} rows={8} />
@@ -50,6 +78,7 @@ export function ReaderScreen() {
         Import PDF
         <input type="file" accept="application/pdf" onChange={(event) => void importPdf(event.target.files?.[0])} />
       </label>
+      {desktopProgress !== undefined ? <p role="status">{desktopProgressMessage(desktopProgress)}</p> : null}
       {extraction !== undefined && !extraction.ok ? <p role="status">{extraction.message}</p> : null}
       {extraction?.ok ? <p role="status">Imported {extraction.document.pages.length} pages.</p> : null}
       <section aria-label="Reader" style={{ display: "grid", gap: 16, textAlign: "center" }}>
@@ -76,4 +105,19 @@ export function ReaderScreen() {
       </section>
     </main>
   );
+}
+
+function desktopProgressMessage(progress: DesktopExtractionProgress): string {
+  switch (progress.event) {
+    case "selected":
+      return `Opening ${progress.data.fileName}…`;
+    case "reading":
+      return "Reading the local document…";
+    case "extractingPdf":
+      return `Extracting ${progress.data.pageCount} PDF pages locally…`;
+    case "recognizingPage":
+      return `Recognizing scanned page ${progress.data.pageNumber} locally…`;
+    case "finished":
+      return `Finished extracting ${progress.data.pageCount} pages.`;
+  }
 }

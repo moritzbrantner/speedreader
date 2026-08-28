@@ -59,13 +59,32 @@ function errorMessage(value: unknown): string | undefined {
     : undefined;
 }
 
-function isReadingDocument(value: unknown): value is ReadingDocument {
+export function isReadingDocument(value: unknown): value is ReadingDocument {
   if (typeof value !== "object" || value === null) return false;
   const document = value as Record<string, unknown>;
   return (
     typeof document.version === "number" &&
     typeof document.text === "string" &&
     Array.isArray(document.pages) &&
-    Array.isArray(document.diagnostics)
+    document.pages.every(isExtractedPage) &&
+    Array.isArray(document.diagnostics) &&
+    document.diagnostics.every(isCleanupDiagnostic)
+  );
+}
+
+function isExtractedPage(value: unknown): value is ExtractedPage {
+  if (typeof value !== "object" || value === null) return false;
+  const page = value as Record<string, unknown>;
+  return typeof page.pageNumber === "number" && typeof page.text === "string" && "provenance" in page;
+}
+
+function isCleanupDiagnostic(value: unknown): value is CleanupDiagnostic {
+  if (typeof value !== "object" || value === null) return false;
+  const diagnostic = value as Record<string, unknown>;
+  return (
+    typeof diagnostic.kind === "string" &&
+    typeof diagnostic.text === "string" &&
+    Array.isArray(diagnostic.pages) &&
+    diagnostic.pages.every((page) => typeof page === "number")
   );
 }

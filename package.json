@@ -7,6 +7,8 @@
     "build": "turbo run build",
     "ci": "bun run lint && bun run typecheck && bun run test && bun run build && bun run cargo:check",
     "cargo:check": "cargo check --workspace",
+    "desktop:build": "bun --filter @speedreader/desktop build",
+    "desktop:bundle": "bun --filter @speedreader/desktop bundle",
     "lint": "turbo run lint",
     "test": "turbo run test && bun test tests",
     "typecheck": "turbo run typecheck"

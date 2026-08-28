@@ -91,6 +91,15 @@ pub fn extract_pdf(
     extract_pages(inspect_pdf(pdf)?, ocr)
 }
 
+/// Create the shared reading-document contract from a plain-text source.
+pub fn extract_text(text: &str) -> ReadingDocument {
+    cleanup(vec![ExtractedPage {
+        page_number: 1,
+        text: normalize_whitespace(text),
+        provenance: ExtractionProvenance::EmbeddedText,
+    }])
+}
+
 pub fn extract_pages(
     pages: impl IntoIterator<Item = PageInput>,
     ocr: &impl CanonicalOcr,
@@ -115,10 +124,10 @@ pub fn extract_pages(
             provenance,
         });
     }
-    cleanup(extracted)
+    Ok(cleanup(extracted))
 }
 
-fn cleanup(mut pages: Vec<ExtractedPage>) -> Result<ReadingDocument, ExtractionError> {
+fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
     let margins = recurring_margin_lines(&pages);
     let mut diagnostics = Vec::new();
     for (line, page_numbers) in &margins {
@@ -148,7 +157,7 @@ fn cleanup(mut pages: Vec<ExtractedPage>) -> Result<ReadingDocument, ExtractionE
         page.text = retained.join("\n");
     }
 
-    Ok(ReadingDocument {
+    ReadingDocument {
         version: READING_DOCUMENT_VERSION,
         text: pages
             .iter()
@@ -158,7 +167,7 @@ fn cleanup(mut pages: Vec<ExtractedPage>) -> Result<ReadingDocument, ExtractionE
             .join("\n\n"),
         pages,
         diagnostics,
-    })
+    }
 }
 
 fn recurring_margin_lines(pages: &[ExtractedPage]) -> BTreeMap<String, Vec<u32>> {

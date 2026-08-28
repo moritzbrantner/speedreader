@@ -2,11 +2,16 @@
   "name": "@speedreader/desktop",
   "private": true,
   "scripts": {
+    "build": "tauri build --no-bundle",
+    "bundle": "tauri build",
+    "check": "bun run typecheck && bun run test && bun run build",
     "dev": "tauri dev",
     "lint": "tsc --noEmit",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@speedreader/web": "workspace:*",
     "@tauri-apps/cli": "^2.5.0",
     "typescript": "^5.8.3"
   }

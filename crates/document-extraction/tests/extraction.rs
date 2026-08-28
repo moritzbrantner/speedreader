@@ -1,10 +1,24 @@
 use document_extraction::{
-    extract_pages, extract_pdf, CanonicalOcr, ExtractionError, ExtractionProvenance, PageInput,
+    extract_pages, extract_pdf, extract_text, CanonicalOcr, ExtractionError, ExtractionProvenance,
+    PageInput,
 };
 use image_analysis_ocr::OcrPreset;
 use lopdf::{dictionary, Document, Object, Stream};
 
 struct FixtureOcr;
+
+#[test]
+fn creates_the_shared_document_contract_for_plain_text() {
+    let document = extract_text("Hello   local\n\nreader");
+
+    assert_eq!(document.version, 1);
+    assert_eq!(document.text, "Hello local\nreader");
+    assert_eq!(document.pages.len(), 1);
+    assert_eq!(
+        document.pages[0].provenance,
+        ExtractionProvenance::EmbeddedText
+    );
+}
 
 impl CanonicalOcr for FixtureOcr {
     fn recognize_page(&self, page_number: u32) -> Result<String, ExtractionError> {
