@@ -1,0 +1,20 @@
+{
+  "expo": {
+    "name": "Speedreader",
+    "slug": "speedreader",
+    "scheme": "speedreader",
+    "version": "0.0.1",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "android": {
+      "package": "dev.brantner.speedreader"
+    },
+    "ios": {
+      "bundleIdentifier": "dev.brantner.speedreader"
+    }
+  }
+}

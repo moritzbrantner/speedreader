@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = [
+  "apps/server",
+  "apps/desktop/src-tauri",
+]
+default-members = ["apps/server"]

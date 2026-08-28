@@ -1,0 +1,27 @@
+{
+  "name": "speedreader",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "bun --cwd apps/web dev",
+    "dev:mobile": "bun --cwd apps/mobile dev",
+    "dev:desktop": "bun --cwd apps/desktop dev",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "build:web": "bun --cwd apps/web build",
+    "build:mobile": "bun --cwd apps/mobile build",
+    "build:desktop": "bun --cwd apps/desktop build",
+    "rust:check": "cargo check -p speedreader-server",
+    "rust:test": "cargo test -p speedreader-server",
+    "desktop:check": "cargo check -p speedreader-desktop",
+    "verify": "bun run typecheck && bun run test && bun run build:web && bun run build:mobile && bun run rust:check && bun run rust:test"
+  },
+  "devDependencies": {
+    "turbo": "^2.9.6",
+    "typescript": "6.0.3"
+  }
+}
