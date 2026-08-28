@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  a0:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install JavaScript dependencies
+        run: bun install
+
+      - name: Typecheck shared and platform TypeScript
+        run: bun run typecheck
+
+      - name: Test shared reader
+        run: bun run test
+
+      - name: Build static Next.js app
+        run: bun run build:web
+
+      - name: Export Expo Android bundle
+        run: bun run build:mobile
+
+      - name: Check Rust server seam
+        run: bun run rust:check
+
+      - name: Test Rust server seam
+        run: bun run rust:test
