@@ -69,8 +69,8 @@ pub fn inspect_pdf(pdf: &[u8]) -> Result<Vec<PageInput>, ExtractionError> {
     let document = Document::load_mem(pdf)?;
     document
         .get_pages()
-        .into_iter()
-        .map(|(page_number, _)| {
+        .into_keys()
+        .map(|page_number| {
             let embedded_text = document.extract_text(&[page_number]).unwrap_or_default();
             Ok(PageInput {
                 page_number,
@@ -174,7 +174,7 @@ fn recurring_margin_lines(pages: &[ExtractedPage]) -> BTreeMap<String, Vec<u32>>
     let mut occurrences: BTreeMap<String, Vec<u32>> = BTreeMap::new();
     for page in pages {
         let lines: Vec<_> = page.text.lines().collect();
-        for line in lines.first().into_iter().chain(lines.last().into_iter()) {
+        for line in lines.first().into_iter().chain(lines.last()) {
             let trimmed = line.trim();
             if !trimmed.is_empty() && !is_page_number(trimmed) {
                 let page_numbers = occurrences.entry(trimmed.to_string()).or_default();
