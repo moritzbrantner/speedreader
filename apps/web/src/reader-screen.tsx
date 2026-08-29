@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useSpeedReader } from "@moritzbrantner/speed-reading/react";
 import { readerFixture } from "@moritzbrantner/speed-reading/fixture";
+import { createReadingDocument } from "@moritzbrantner/speed-reading/persistence";
+import { useDurableSpeedReader } from "@moritzbrantner/speed-reading/react";
 
 import { extractPdfDocument, type ExtractionResult } from "./extraction";
 import {
@@ -10,13 +11,22 @@ import {
   openDesktopDocument,
   type DesktopExtractionProgress,
 } from "./desktop-extraction";
+import { createPlatformReaderPersistence } from "./platform-persistence";
+
+const initialDocument = createReadingDocument({
+  id: "local-draft",
+  title: "Local draft",
+  text: readerFixture,
+  source: "plain-text",
+  updatedAt: "1970-01-01T00:00:00.000Z",
+});
+const readerPersistence = createPlatformReaderPersistence();
 
 export function ReaderScreen() {
-  const [text, setText] = useState(readerFixture);
   const [extraction, setExtraction] = useState<ExtractionResult | undefined>();
   const [desktopAvailable, setDesktopAvailable] = useState(false);
   const [desktopProgress, setDesktopProgress] = useState<DesktopExtractionProgress | undefined>();
-  const reader = useSpeedReader(text);
+  const reader = useDurableSpeedReader({ initialDocument, persistence: readerPersistence });
   const toggle = useCallback(() => {
     if (reader.isPlaying) reader.pause();
     else reader.play();
@@ -44,7 +54,14 @@ export function ReaderScreen() {
     if (file === undefined) return;
     const result = await extractPdfDocument(file, process.env.NEXT_PUBLIC_EXTRACTION_URL);
     setExtraction(result);
-    if (result.ok) setText(result.document.text);
+    if (result.ok) {
+      reader.openDocument(createReadingDocument({
+        title: file.name,
+        text: result.document.text,
+        source: "pdf",
+        updatedAt: new Date().toISOString(),
+      }));
+    }
   };
 
   const openNativeDocument = async () => {
@@ -52,7 +69,12 @@ export function ReaderScreen() {
     const result = await openDesktopDocument(setDesktopProgress);
     setDesktopProgress(undefined);
     if (result.status === "opened") {
-      setText(result.document.text);
+      reader.openDocument(createReadingDocument({
+        title: result.fileName,
+        text: result.document.text,
+        source: result.fileName.toLowerCase().endsWith(".pdf") ? "pdf" : "plain-text",
+        updatedAt: new Date().toISOString(),
+      }));
       setExtraction({ ok: true, document: result.document });
     } else if (result.status === "error") {
       setExtraction({ ok: false, message: result.message });
@@ -72,7 +94,11 @@ export function ReaderScreen() {
       ) : null}
       <label style={{ display: "grid", gap: 8 }}>
         Source text
-        <textarea value={text} onChange={(event) => setText(event.target.value)} rows={8} />
+        <textarea
+          value={reader.document.text}
+          onChange={(event) => reader.setText(event.target.value)}
+          rows={8}
+        />
       </label>
       <label>
         Import PDF

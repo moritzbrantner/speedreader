@@ -15,13 +15,21 @@ import {
 } from "react-native";
 
 import { readerFixture } from "@moritzbrantner/speed-reading/fixture";
-import { useSpeedReader, type SpeedReaderController } from "@moritzbrantner/speed-reading/react";
+import {
+  createReadingDocument,
+  type ReaderPersistence,
+} from "@moritzbrantner/speed-reading/persistence";
+import {
+  useDurableSpeedReader,
+  type SpeedReaderController,
+} from "@moritzbrantner/speed-reading/react";
 
 import type { DocumentImportAdapter, DocumentImportResult } from "./document-import";
 import { readerLayoutMode } from "./reader-layout";
 
 type ReaderScreenProps = Readonly<{
   documentImporter: DocumentImportAdapter;
+  persistence?: ReaderPersistence;
 }>;
 
 type ImportState =
@@ -57,14 +65,21 @@ const themes = {
   },
 } as const;
 
-export function ReaderScreen({ documentImporter }: ReaderScreenProps) {
-  const [text, setText] = useState(readerFixture);
+const initialDocument = createReadingDocument({
+  id: "local-draft",
+  title: "Local draft",
+  text: readerFixture,
+  source: "plain-text",
+  updatedAt: "1970-01-01T00:00:00.000Z",
+});
+
+export function ReaderScreen({ documentImporter, persistence }: ReaderScreenProps) {
   const [importState, setImportState] = useState<ImportState>({ status: "idle" });
   const dimensions = useWindowDimensions();
   const layout = readerLayoutMode(dimensions.width, dimensions.height);
   const colorScheme = useColorScheme();
   const theme = themes[colorScheme === "dark" ? "dark" : "light"];
-  const reader = useSpeedReader(text);
+  const reader = useDurableSpeedReader({ initialDocument, persistence });
 
   const importDocument = useCallback(async () => {
     setImportState({ status: "importing" });
@@ -78,9 +93,14 @@ export function ReaderScreen({ documentImporter }: ReaderScreenProps) {
       return;
     }
 
-    setText(result.text);
+    reader.openDocument(createReadingDocument({
+      title: result.fileName,
+      text: result.text,
+      source: result.source,
+      updatedAt: new Date().toISOString(),
+    }));
     setImportState({ status: "success", message: importMessage(result) });
-  }, [documentImporter]);
+  }, [documentImporter, reader]);
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
@@ -135,7 +155,7 @@ export function ReaderScreen({ documentImporter }: ReaderScreenProps) {
                 accessibilityHint="Editing the text resets reading progress"
                 accessibilityLabel="Source text"
                 multiline
-                onChangeText={setText}
+                onChangeText={reader.setText}
                 placeholder="Paste or type text to read"
                 placeholderTextColor={theme.textMuted}
                 style={[
@@ -147,7 +167,7 @@ export function ReaderScreen({ documentImporter }: ReaderScreenProps) {
                   },
                 ]}
                 textAlignVertical="top"
-                value={text}
+                value={reader.document.text}
               />
             </View>
           </View>

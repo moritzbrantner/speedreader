@@ -6,6 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./core": "./src/core.ts",
+    "./parity-fixtures": "./src/parity-fixtures.ts",
+    "./persistence": "./src/persistence.ts",
     "./react": "./src/react.ts",
     "./fixture": "./src/fixture.ts"
   },

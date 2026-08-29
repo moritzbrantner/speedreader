@@ -37,29 +37,36 @@ mock.module("react-native", () => ({
   View: nativeHost("View"),
 }));
 mock.module("@moritzbrantner/speed-reading/react", () => ({
-  useSpeedReader: (text: string) => {
+  useDurableSpeedReader: ({ initialDocument }: Readonly<{
+    initialDocument: Readonly<{ text: string }>;
+  }>) => {
+    const [document, setDocument] = React.useState(initialDocument);
     const [chunkIndex, setChunkIndex] = React.useState(0);
     const [chunkSize, setChunkSize] = React.useState(defaultReaderSettings.chunkSize);
     const [wordsPerMinute, setWordsPerMinute] = React.useState(defaultReaderSettings.wordsPerMinute);
     const [isPlaying, setIsPlaying] = React.useState(false);
-    const chunks = chunkText(text, chunkSize);
+    const chunks = chunkText(document.text, chunkSize);
     const progress = progressFor(chunks, chunkIndex);
 
     React.useEffect(() => {
       setChunkIndex(0);
       setIsPlaying(false);
-    }, [text]);
+    }, [document.text]);
 
     return {
       chunks,
       currentChunk: chunks[progress.chunkIndex],
+      document,
       isPlaying,
       progress,
+      restored: true,
       settings: { ...defaultReaderSettings, chunkSize, wordsPerMinute },
+      openDocument: setDocument,
       pause: () => setIsPlaying(false),
       play: () => setIsPlaying(true),
       seek: setChunkIndex,
       setChunkSize,
+      setText: (text: string) => setDocument((current) => ({ ...current, text })),
       setWordsPerMinute,
     };
   },

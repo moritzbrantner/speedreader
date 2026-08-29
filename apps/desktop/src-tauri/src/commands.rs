@@ -15,6 +15,8 @@ use serde::Serialize;
 use tauri::{ipc::Channel, AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
 
+const READER_STATE_FILE_NAME: &str = "reader-state-v1.json";
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(
     rename_all = "camelCase",
@@ -65,6 +67,46 @@ pub async fn open_document(
     tauri::async_runtime::spawn_blocking(move || select_and_open_document(&app, &on_progress))
         .await
         .map_err(|error| OpenDocumentError::Runtime(error.to_string()))?
+}
+
+#[tauri::command]
+pub fn load_reader_state(app: AppHandle) -> Result<Option<String>, String> {
+    let path = reader_state_path(&app)?;
+    match std::fs::read_to_string(&path) {
+        Ok(serialized) => Ok(Some(serialized)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!(
+            "Could not read reader state from {}: {error}",
+            path.display()
+        )),
+    }
+}
+
+#[tauri::command]
+pub fn save_reader_state(app: AppHandle, serialized: String) -> Result<(), String> {
+    let path = reader_state_path(&app)?;
+    let directory = path
+        .parent()
+        .ok_or_else(|| "Reader state path has no parent directory".to_string())?;
+    std::fs::create_dir_all(directory).map_err(|error| {
+        format!(
+            "Could not create reader state directory {}: {error}",
+            directory.display()
+        )
+    })?;
+    std::fs::write(&path, serialized).map_err(|error| {
+        format!(
+            "Could not write reader state to {}: {error}",
+            path.display()
+        )
+    })
+}
+
+fn reader_state_path(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path()
+        .app_local_data_dir()
+        .map(|directory| directory.join(READER_STATE_FILE_NAME))
+        .map_err(|error| error.to_string())
 }
 
 fn select_and_open_document(

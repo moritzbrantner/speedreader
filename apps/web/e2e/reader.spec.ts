@@ -80,3 +80,22 @@ test("feeds a mocked PDF reading document into the reader", async ({ page }) => 
   await expect(reader.getByRole("status")).toHaveText("Extracted");
   await expect(reader.getByText("0 / 4", { exact: true })).toBeVisible();
 });
+
+test("restores plain-text preferences and progress after a browser restart", async ({ page }) => {
+  await page.goto("/");
+
+  const sourceText = page.getByLabel("Source text");
+  const reader = page.getByRole("region", { name: "Reader" });
+  await sourceText.fill("Durable browser progress works");
+  await reader.getByRole("slider").fill("420");
+  await reader.getByRole("button", { name: "Next" }).click();
+  await reader.getByRole("button", { name: "Next" }).click();
+  await expect(reader.getByRole("status")).toHaveText("progress");
+
+  await page.reload();
+
+  await expect(sourceText).toHaveValue("Durable browser progress works");
+  await expect(reader.getByRole("status")).toHaveText("progress");
+  await expect(reader.getByRole("slider")).toHaveValue("420");
+  await expect(reader.getByText("2 / 4", { exact: true })).toBeVisible();
+});

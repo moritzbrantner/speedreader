@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   type ReaderChunk,
@@ -13,6 +13,14 @@ import {
   type ReadingSession,
   type ReadingSessionEvent,
 } from "./session";
+import {
+  createEmptyPersistedReaderState,
+  currentReadingDocument,
+  restoreReadingSession,
+  updatePersistedReaderState,
+  type ReaderPersistence,
+  type ReadingDocument,
+} from "./persistence";
 
 export type SpeedReaderController = Readonly<{
   chunks: readonly ReaderChunk[];
@@ -36,6 +44,19 @@ export type UseReadingSessionOptions = Readonly<{
 export type ReadingSessionController = Readonly<{
   dispatch: (event: ReadingSessionEvent) => void;
   snapshot: ReturnType<typeof snapshotFor>;
+}>;
+
+export type DurableSpeedReaderController = SpeedReaderController & Readonly<{
+  document: ReadingDocument;
+  restored: boolean;
+  openDocument: (document: ReadingDocument) => void;
+  setText: (text: string) => void;
+}>;
+
+export type UseDurableSpeedReaderOptions = Readonly<{
+  initialDocument: ReadingDocument;
+  persistence?: ReaderPersistence;
+  now?: () => string;
 }>;
 
 export function useReadingSession(options: UseReadingSessionOptions): ReadingSessionController {
@@ -105,5 +126,91 @@ export function useSpeedReader(
     seek,
     setChunkSize,
     setWordsPerMinute,
+  };
+}
+
+const currentTimestamp = () => new Date().toISOString();
+
+export function useDurableSpeedReader(
+  options: UseDurableSpeedReaderOptions,
+): DurableSpeedReaderController {
+  const { initialDocument, persistence } = options;
+  const now = options.now ?? currentTimestamp;
+  const persistedState = useRef(createEmptyPersistedReaderState());
+  const [document, setDocument] = useState(initialDocument);
+  const [session, setSession] = useState(() => createReadingSession(initialDocument.text));
+  const [restored, setRestored] = useState(persistence === undefined);
+
+  useEffect(() => {
+    if (persistence === undefined) {
+      setRestored(true);
+      return;
+    }
+
+    let active = true;
+    setRestored(false);
+    void persistence.load()
+      .catch(() => undefined)
+      .then((loaded) => {
+        if (!active) return;
+        const state = loaded ?? createEmptyPersistedReaderState();
+        const restoredDocument = currentReadingDocument(state) ?? initialDocument;
+        persistedState.current = state;
+        setDocument(restoredDocument);
+        setSession(restoreReadingSession(restoredDocument, state));
+        setRestored(true);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [initialDocument, persistence]);
+
+  useEffect(() => {
+    if (!restored || persistence === undefined) return;
+    const next = updatePersistedReaderState(
+      persistedState.current,
+      document,
+      session,
+      now(),
+    );
+    persistedState.current = next;
+    void persistence.save(next).catch(() => undefined);
+  }, [document, now, persistence, restored, session]);
+
+  const { dispatch, snapshot } = useReadingSession({
+    session,
+    onSessionChange: setSession,
+  });
+
+  const openDocument = useCallback((nextDocument: ReadingDocument) => {
+    setDocument(nextDocument);
+    setSession(restoreReadingSession(nextDocument, persistedState.current));
+  }, []);
+
+  const setText = useCallback((text: string) => {
+    setDocument((currentDocument) => ({
+      ...currentDocument,
+      text,
+      updatedAt: now(),
+    }));
+    setSession((currentSession) => createReadingSession(text, currentSession.settings));
+  }, [now]);
+
+  return {
+    chunks: snapshot.chunks,
+    currentChunk: snapshot.currentChunk,
+    document,
+    isPlaying: snapshot.session.status === "playing",
+    progress: snapshot.progress,
+    restored,
+    settings: snapshot.session.settings,
+    openDocument,
+    pause: () => dispatch({ type: "pause" }),
+    play: () => dispatch({ type: "play" }),
+    seek: (chunkIndex) => dispatch({ type: "seek", chunkIndex }),
+    setChunkSize: (chunkSize) => dispatch({ type: "set-chunk-size", chunkSize }),
+    setText,
+    setWordsPerMinute: (wordsPerMinute) => dispatch({ type: "set-wpm", wordsPerMinute }),
   };
 }

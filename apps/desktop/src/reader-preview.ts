@@ -3,17 +3,12 @@ import {
   millisecondsForChunk,
   progressFor,
 } from "@moritzbrantner/speed-reading/core";
-import { readerFixture } from "@moritzbrantner/speed-reading/fixture";
 import {
   type ReaderParityFixture,
   type ReaderParityResult,
 } from "@moritzbrantner/speed-reading/parity-fixtures";
 
-export function webReaderPreview(): readonly string[] {
-  return chunkText(readerFixture).map((chunk) => chunk.text);
-}
-
-export function webReaderParity(fixture: ReaderParityFixture): ReaderParityResult {
+export function desktopReaderParity(fixture: ReaderParityFixture): ReaderParityResult {
   const chunks = chunkText(fixture.text, fixture.settings.chunkSize, fixture.settings.segmentation);
   return {
     chunks: chunks.map((chunk) => chunk.text),
