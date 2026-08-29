@@ -1,8 +1,23 @@
 {
   "expo": {
-    "name": "speedreader",
+    "name": "Speedreader",
     "slug": "speedreader",
+    "version": "1.0.0",
     "scheme": "speedreader",
-    "plugins": ["expo-router"]
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "plugins": ["expo-router"],
+    "ios": {
+      "bundleIdentifier": "com.moritzbrantner.speedreader",
+      "supportsTablet": true
+    },
+    "android": {
+      "edgeToEdgeEnabled": true,
+      "package": "com.moritzbrantner.speedreader"
+    },
+    "experiments": {
+      "typedRoutes": true
+    }
   }
 }
