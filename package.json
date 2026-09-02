@@ -9,7 +9,7 @@
     "cargo:check": "cargo check --workspace",
     "desktop:build": "bun --filter @speedreader/desktop build",
     "desktop:bundle": "bun --filter @speedreader/desktop bundle",
-    "lint": "turbo run lint",
+    "lint": "bunx oxlint@1.80.0 apps packages --format=github && turbo run lint",
     "test": "turbo run test && bun test tests",
     "typecheck": "turbo run typecheck"
   },
