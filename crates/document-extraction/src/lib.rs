@@ -79,6 +79,7 @@ pub enum DocumentTextRole {
     Caption,
     Table,
     Form,
+    Footnote,
     Header,
     Footer,
     PageNumber,
@@ -93,6 +94,8 @@ pub enum DocumentTextEvidence {
     NumericOnly,
     SequentialPageNumber,
     OcrBlockHint,
+    BottomPageBand,
+    FootnoteMarker,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -242,6 +245,7 @@ fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
             .lines()
             .map(str::to_string)
             .collect::<Vec<String>>();
+        let source_image_size = page.source_image_size;
         let mut regions = std::mem::take(&mut page.regions);
         if !regions_match_lines(&regions, &lines) {
             regions = regions_from_text(&page.text);
@@ -296,7 +300,8 @@ fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
                     false,
                 )
             } else {
-                let (role, confidence, evidence) = classify_content_region(region);
+                let (role, confidence, evidence) =
+                    classify_content_region(region, source_image_size);
                 (role, confidence, evidence, true)
             };
 
@@ -332,24 +337,98 @@ fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
 
 fn classify_content_region(
     region: &DocumentTextRegion,
+    source_image_size: Option<DocumentPixelSize>,
 ) -> (DocumentTextRole, Option<u8>, Vec<DocumentTextEvidence>) {
-    let Some(block_kind) = region
+    if let Some(block_kind) = region
         .ocr
         .as_ref()
         .and_then(|ocr| ocr.block_kind.as_deref())
-    else {
-        return (DocumentTextRole::Content, None, Vec::new());
-    };
+    {
+        let role = match block_kind {
+            "heading" => Some(DocumentTextRole::Heading),
+            "caption" => Some(DocumentTextRole::Caption),
+            "table" => Some(DocumentTextRole::Table),
+            "form" => Some(DocumentTextRole::Form),
+            _ => None,
+        };
+        if let Some(role) = role {
+            return (role, None, vec![DocumentTextEvidence::OcrBlockHint]);
+        }
+    }
 
-    let role = match block_kind {
-        "heading" => DocumentTextRole::Heading,
-        "caption" => DocumentTextRole::Caption,
-        "table" => DocumentTextRole::Table,
-        "form" => DocumentTextRole::Form,
-        _ => return (DocumentTextRole::Content, None, Vec::new()),
-    };
+    if is_bottom_page_band(region, source_image_size) && has_footnote_marker(&region.text) {
+        return (
+            DocumentTextRole::Footnote,
+            None,
+            vec![
+                DocumentTextEvidence::BottomPageBand,
+                DocumentTextEvidence::FootnoteMarker,
+            ],
+        );
+    }
 
-    (role, None, vec![DocumentTextEvidence::OcrBlockHint])
+    (DocumentTextRole::Content, None, Vec::new())
+}
+
+fn is_bottom_page_band(
+    region: &DocumentTextRegion,
+    source_image_size: Option<DocumentPixelSize>,
+) -> bool {
+    let Some(page_size) = source_image_size else {
+        return false;
+    };
+    let Some(bounds) = region.ocr.as_ref().and_then(|ocr| ocr.region) else {
+        return false;
+    };
+    if page_size.height == 0 {
+        return false;
+    }
+
+    let bottom = u64::from(bounds.y) + u64::from(bounds.height);
+    bottom.saturating_mul(4) >= u64::from(page_size.height).saturating_mul(3)
+}
+
+fn has_footnote_marker(text: &str) -> bool {
+    let text = text.trim_start();
+    if text.is_empty() {
+        return false;
+    }
+
+    for marker in ["*", "†", "‡"] {
+        if let Some(body) = text.strip_prefix(marker) {
+            return body.chars().any(char::is_alphabetic);
+        }
+    }
+
+    if let Some(rest) = text.strip_prefix('[') {
+        if let Some(closing) = rest.find(']') {
+            let marker = &rest[..closing];
+            let body = &rest[closing + 1..];
+            if !marker.is_empty()
+                && marker.bytes().all(|byte| byte.is_ascii_digit())
+                && body.chars().any(char::is_alphabetic)
+            {
+                return true;
+            }
+        }
+    }
+
+    let digit_count = text
+        .bytes()
+        .take_while(|byte| byte.is_ascii_digit())
+        .count();
+    if digit_count == 0 || digit_count == text.len() {
+        return false;
+    }
+    let rest = &text[digit_count..];
+    let Some(separator) = rest.as_bytes().first().copied() else {
+        return false;
+    };
+    if !matches!(separator, b'.' | b')' | b':') {
+        return false;
+    }
+
+    rest[1..].chars().any(char::is_alphabetic)
 }
 
 #[derive(Debug, Clone)]
