@@ -568,10 +568,7 @@ fn detect_page_layout(
             }
         }
 
-        let overlapping_count = overlaps_another
-            .iter()
-            .filter(|overlaps| **overlaps)
-            .count();
+        let overlapping_count = overlaps_another.iter().filter(|overlaps| **overlaps).count();
         if overlapping_count >= 2 {
             clusters = clusters
                 .into_iter()
@@ -582,13 +579,15 @@ fn detect_page_layout(
             // Horizontally separated blocks that occur in different vertical sections are
             // indentation/layout changes, not simultaneous columns. Keep only the most
             // strongly supported cluster as the single-column page structure.
-            let strongest = clusters.into_iter().max_by(|left, right| {
-                left.len().cmp(&right.len()).then_with(|| {
-                    layout_cluster_bounds(right)
-                        .x
-                        .cmp(&layout_cluster_bounds(left).x)
-                })
-            })?;
+            let strongest = clusters
+                .into_iter()
+                .max_by(|left, right| {
+                    left.len().cmp(&right.len()).then_with(|| {
+                        layout_cluster_bounds(right)
+                            .x
+                            .cmp(&layout_cluster_bounds(left).x)
+                    })
+                })?;
             clusters = vec![strongest];
         }
     }
@@ -674,8 +673,8 @@ fn is_narrow_sidebar_candidate(
     let bounds = candidate.bounds;
     let narrow_for_page = u64::from(bounds.width).saturating_mul(100)
         <= u64::from(page_size.width).saturating_mul(25);
-    let narrow_relative_to_body =
-        u64::from(bounds.width).saturating_mul(100) <= u64::from(widest).saturating_mul(55);
+    let narrow_relative_to_body = u64::from(bounds.width).saturating_mul(100)
+        <= u64::from(widest).saturating_mul(55);
     if !narrow_for_page || !narrow_relative_to_body || !is_at_page_edge(bounds, page_size.width) {
         return false;
     }
@@ -686,8 +685,8 @@ fn is_narrow_sidebar_candidate(
         }
         let body_is_substantial = u64::from(body.bounds.width).saturating_mul(100)
             >= u64::from(page_size.width).saturating_mul(30);
-        let secondary_support =
-            candidate.region_indices.len().saturating_mul(2) <= body.region_indices.len();
+        let secondary_support = candidate.region_indices.len().saturating_mul(2)
+            <= body.region_indices.len();
         body_is_substantial
             && secondary_support
             && vertically_overlaps(candidate.bounds, body.bounds)
@@ -695,10 +694,11 @@ fn is_narrow_sidebar_candidate(
 }
 
 fn is_at_page_edge(bounds: DocumentPixelRegion, page_width: u32) -> bool {
-    let left_edge =
-        u64::from(bounds.x).saturating_mul(100) <= u64::from(page_width).saturating_mul(10);
+    let left_edge = u64::from(bounds.x).saturating_mul(100)
+        <= u64::from(page_width).saturating_mul(10);
     let right = u64::from(bounds.x) + u64::from(bounds.width);
-    let right_edge = right.saturating_mul(100) >= u64::from(page_width).saturating_mul(90);
+    let right_edge = right.saturating_mul(100)
+        >= u64::from(page_width).saturating_mul(90);
     left_edge || right_edge
 }
 
@@ -760,7 +760,9 @@ fn derive_reading_order(
             return source;
         };
         match region.role {
-            DocumentTextRole::Heading if bounds.y.saturating_add(bounds.height) <= body_top => {
+            DocumentTextRole::Heading
+                if bounds.y.saturating_add(bounds.height) <= body_top =>
+            {
                 prefix.push(*region_index);
             }
             DocumentTextRole::Footnote if bounds.y >= body_bottom => {
@@ -780,9 +782,11 @@ fn derive_reading_order(
             .iter()
             .copied()
             .filter(|index| {
-                regions.get(*index as usize).is_some_and(|region| {
-                    region.include_in_reading && region.role == DocumentTextRole::Content
-                })
+                regions
+                    .get(*index as usize)
+                    .is_some_and(|region| {
+                        region.include_in_reading && region.role == DocumentTextRole::Content
+                    })
             })
             .collect::<Vec<_>>();
         sort_region_indices_by_geometry(&mut indices, regions);
@@ -794,9 +798,11 @@ fn derive_reading_order(
             .iter()
             .copied()
             .filter(|index| {
-                regions.get(*index as usize).is_some_and(|region| {
-                    region.include_in_reading && region.role == DocumentTextRole::Sidebar
-                })
+                regions
+                    .get(*index as usize)
+                    .is_some_and(|region| {
+                        region.include_in_reading && region.role == DocumentTextRole::Sidebar
+                    })
             })
             .collect::<Vec<_>>();
         sort_region_indices_by_geometry(&mut indices, regions);
@@ -1123,7 +1129,8 @@ fn margin_line<'a>(
     excluded: Option<&BTreeSet<usize>>,
 ) -> Option<(usize, &'a str)> {
     let is_candidate = |line_index: usize, line: &str| {
-        !line.trim().is_empty() && !excluded.is_some_and(|indices| indices.contains(&line_index))
+        !line.trim().is_empty()
+            && !excluded.is_some_and(|indices| indices.contains(&line_index))
     };
 
     match position {
