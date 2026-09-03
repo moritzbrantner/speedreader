@@ -115,9 +115,7 @@ fn document_evidence_observation(evidence: DocumentTextEvidence) -> Evidence {
             DocumentTextEvidence::BottomPageBand => {
                 "speedreader:document-evidence:bottom-page-band"
             }
-            DocumentTextEvidence::FootnoteMarker => {
-                "speedreader:document-evidence:footnote-marker"
-            }
+            DocumentTextEvidence::FootnoteMarker => "speedreader:document-evidence:footnote-marker",
             DocumentTextEvidence::NarrowLayoutColumn => {
                 "speedreader:document-evidence:narrow-layout-column"
             }
@@ -147,11 +145,10 @@ mod tests {
     struct FixtureOcr;
 
     impl CanonicalOcr for FixtureOcr {
-        fn recognize_page(
-            &self,
-            page_number: u32,
-        ) -> Result<CanonicalOcrResult, ExtractionError> {
-            Ok(CanonicalOcrResult::Text(format!("scanned page {page_number}")))
+        fn recognize_page(&self, page_number: u32) -> Result<CanonicalOcrResult, ExtractionError> {
+            Ok(CanonicalOcrResult::Text(format!(
+                "scanned page {page_number}"
+            )))
         }
 
         fn preset(&self) -> OcrPreset {
@@ -178,10 +175,7 @@ mod tests {
 
         let annotations = semantic_annotations(&document).unwrap();
         let header = &annotations[0];
-        assert_eq!(
-            header.concept.as_str(),
-            "speedreader:document-role:header"
-        );
+        assert_eq!(header.concept.as_str(), "speedreader:document-role:header");
         assert_eq!(header.confidence.unwrap().get(), 0.9);
         assert!(header.evidence.iter().any(|evidence| matches!(
             evidence,
@@ -226,7 +220,10 @@ mod tests {
         let baseline = semantic_annotations(&document).unwrap();
 
         let mut projected_differently = document.clone();
-        projected_differently.pages[0].reading_order.region_indices.reverse();
+        projected_differently.pages[0]
+            .reading_order
+            .region_indices
+            .reverse();
         projected_differently.pages[0].regions[0].include_in_reading = false;
         projected_differently.text = "Second".into();
         projected_differently.pages[0].text = "Second".into();
