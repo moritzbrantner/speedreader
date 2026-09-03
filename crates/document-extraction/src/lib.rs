@@ -5,6 +5,9 @@ use lopdf::Document;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+mod semantic;
+pub use semantic::{document_role_concept, semantic_annotations};
+
 pub const READING_DOCUMENT_VERSION: u8 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
