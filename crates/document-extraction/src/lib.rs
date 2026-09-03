@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use image_analysis_ocr::OcrPreset;
+use image_analysis_ocr::{OcrBlockKind, OcrDocument, OcrPreset};
 use lopdf::Document;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -22,9 +22,36 @@ pub struct ExtractedPage {
     pub page_number: u32,
     pub text: String,
     pub provenance: ExtractionProvenance,
+    /// Pixel dimensions of the rendered source image when this page came from OCR.
+    pub source_image_size: Option<DocumentPixelSize>,
     /// Source lines retained with their structural classification, including lines
     /// excluded from the speed-reading projection.
     pub regions: Vec<DocumentTextRegion>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentPixelSize {
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentPixelRegion {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OcrRegionEvidence {
+    /// Canonical OCR block hint. This is source evidence, not a semantic decision.
+    pub block_kind: Option<String>,
+    pub confidence: Option<u8>,
+    pub region: Option<DocumentPixelRegion>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -37,6 +64,8 @@ pub struct DocumentTextRegion {
     /// Confidence in the structural role. Unclassified reading content has no score.
     pub confidence: Option<u8>,
     pub evidence: Vec<DocumentTextEvidence>,
+    /// OCR-owned evidence retained independently from product structural roles.
+    pub ocr: Option<OcrRegionEvidence>,
     pub include_in_reading: bool,
 }
 
@@ -89,7 +118,7 @@ pub struct PageInput {
 }
 
 pub trait CanonicalOcr {
-    fn recognize_page(&self, page_number: u32) -> Result<String, ExtractionError>;
+    fn recognize_page(&self, page_number: u32) -> Result<OcrDocument, ExtractionError>;
     fn preset(&self) -> OcrPreset;
 }
 
@@ -129,11 +158,14 @@ pub fn extract_pdf(
 
 /// Create the shared reading-document contract from a plain-text source.
 pub fn extract_text(text: &str) -> ReadingDocument {
+    let text = normalize_whitespace(text);
+    let regions = regions_from_text(&text);
     cleanup(vec![ExtractedPage {
         page_number: 1,
-        text: normalize_whitespace(text),
+        text,
         provenance: ExtractionProvenance::EmbeddedText,
-        regions: Vec::new(),
+        source_image_size: None,
+        regions,
     }])
 }
 
@@ -144,22 +176,37 @@ pub fn extract_pages(
     let mut extracted = Vec::new();
     for page in pages {
         let normalized = normalize_whitespace(&page.embedded_text);
-        let (text, provenance) = if normalized.is_empty() {
-            let recognized = normalize_whitespace(&ocr.recognize_page(page.page_number)?);
+        let (text, provenance, source_image_size, regions) = if normalized.is_empty() {
+            let recognized = ocr.recognize_page(page.page_number)?;
+            let text = normalize_whitespace(&recognized.text);
+            let source_image_size = Some(DocumentPixelSize {
+                width: recognized.width,
+                height: recognized.height,
+            });
+            let regions = regions_from_ocr(&recognized, &text);
             (
-                recognized,
+                text,
                 ExtractionProvenance::CanonicalOcr {
                     preset: ocr.preset().as_str().to_string(),
                 },
+                source_image_size,
+                regions,
             )
         } else {
-            (normalized, ExtractionProvenance::EmbeddedText)
+            let regions = regions_from_text(&normalized);
+            (
+                normalized,
+                ExtractionProvenance::EmbeddedText,
+                None,
+                regions,
+            )
         };
         extracted.push(ExtractedPage {
             page_number: page.page_number,
             text,
             provenance,
-            regions: Vec::new(),
+            source_image_size,
+            regions,
         });
     }
     Ok(cleanup(extracted))
@@ -177,9 +224,12 @@ fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
             .lines()
             .map(str::to_string)
             .collect::<Vec<String>>();
-        let mut regions = Vec::with_capacity(lines.len());
+        let mut regions = std::mem::take(&mut page.regions);
+        if !regions_match_lines(&regions, &lines) {
+            regions = regions_from_text(&page.text);
+        }
 
-        for (line_index, line) in lines.iter().enumerate() {
+        for (line_index, (line, region)) in lines.iter().zip(regions.iter_mut()).enumerate() {
             let page_number_line = page_numbers
                 .get(&page.page_number)
                 .is_some_and(|indices| indices.contains(&line_index));
@@ -231,14 +281,12 @@ fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
                 (DocumentTextRole::Content, None, Vec::new(), true)
             };
 
-            regions.push(DocumentTextRegion {
-                source_line_index: line_index as u32,
-                text: line.clone(),
-                role,
-                confidence,
-                evidence,
-                include_in_reading,
-            });
+            region.source_line_index = line_index as u32;
+            region.text = line.clone();
+            region.role = role;
+            region.confidence = confidence;
+            region.evidence = evidence;
+            region.include_in_reading = include_in_reading;
         }
 
         page.text = regions
@@ -261,6 +309,158 @@ fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
         pages,
         diagnostics,
     }
+}
+
+#[derive(Debug, Clone)]
+struct OcrLineMetadata {
+    text: String,
+    evidence: OcrRegionEvidence,
+}
+
+fn regions_from_text(text: &str) -> Vec<DocumentTextRegion> {
+    text.lines()
+        .enumerate()
+        .map(|(line_index, line)| DocumentTextRegion {
+            source_line_index: line_index as u32,
+            text: line.to_string(),
+            role: DocumentTextRole::Content,
+            confidence: None,
+            evidence: Vec::new(),
+            ocr: None,
+            include_in_reading: true,
+        })
+        .collect()
+}
+
+fn regions_from_ocr(document: &OcrDocument, normalized_text: &str) -> Vec<DocumentTextRegion> {
+    let document_confidence = document.confidence.map(|confidence| confidence.value());
+    let metadata = ocr_line_metadata(document, document_confidence);
+    let mut metadata_cursor = 0;
+
+    normalized_text
+        .lines()
+        .enumerate()
+        .map(|(line_index, line)| {
+            let matched = metadata[metadata_cursor..]
+                .iter()
+                .position(|candidate| candidate.text == line)
+                .map(|offset| metadata_cursor + offset);
+            let ocr = matched
+                .map(|index| {
+                    metadata_cursor = index + 1;
+                    metadata[index].evidence.clone()
+                })
+                .unwrap_or(OcrRegionEvidence {
+                    block_kind: None,
+                    confidence: document_confidence,
+                    region: None,
+                });
+
+            DocumentTextRegion {
+                source_line_index: line_index as u32,
+                text: line.to_string(),
+                role: DocumentTextRole::Content,
+                confidence: None,
+                evidence: Vec::new(),
+                ocr: Some(ocr),
+                include_in_reading: true,
+            }
+        })
+        .collect()
+}
+
+fn ocr_line_metadata(
+    document: &OcrDocument,
+    document_confidence: Option<u8>,
+) -> Vec<OcrLineMetadata> {
+    let mut metadata = Vec::new();
+
+    for block in &document.blocks {
+        let block_kind = Some(ocr_block_kind_name(&block.kind));
+        let block_confidence = block
+            .confidence
+            .map(|confidence| confidence.value())
+            .or(document_confidence);
+        let block_region = block.region.as_ref().map(|region| DocumentPixelRegion {
+            x: region.x,
+            y: region.y,
+            width: region.width,
+            height: region.height,
+        });
+
+        if block.lines.is_empty() {
+            push_ocr_metadata_lines(
+                &mut metadata,
+                &block.text,
+                OcrRegionEvidence {
+                    block_kind,
+                    confidence: block_confidence,
+                    region: block_region,
+                },
+            );
+            continue;
+        }
+
+        for line in &block.lines {
+            let line_region = line
+                .region
+                .as_ref()
+                .map(|region| DocumentPixelRegion {
+                    x: region.x,
+                    y: region.y,
+                    width: region.width,
+                    height: region.height,
+                })
+                .or(block_region);
+            let line_confidence = line
+                .confidence
+                .map(|confidence| confidence.value())
+                .or(block_confidence);
+            push_ocr_metadata_lines(
+                &mut metadata,
+                &line.text,
+                OcrRegionEvidence {
+                    block_kind: block_kind.clone(),
+                    confidence: line_confidence,
+                    region: line_region,
+                },
+            );
+        }
+    }
+
+    metadata
+}
+
+fn push_ocr_metadata_lines(
+    metadata: &mut Vec<OcrLineMetadata>,
+    text: &str,
+    evidence: OcrRegionEvidence,
+) {
+    for line in normalize_whitespace(text).lines() {
+        metadata.push(OcrLineMetadata {
+            text: line.to_string(),
+            evidence: evidence.clone(),
+        });
+    }
+}
+
+fn ocr_block_kind_name(kind: &OcrBlockKind) -> String {
+    match kind {
+        OcrBlockKind::Paragraph => "paragraph".to_string(),
+        OcrBlockKind::Heading => "heading".to_string(),
+        OcrBlockKind::Table => "table".to_string(),
+        OcrBlockKind::Form => "form".to_string(),
+        OcrBlockKind::Caption => "caption".to_string(),
+        OcrBlockKind::Custom(value) => value.clone(),
+    }
+}
+
+fn regions_match_lines(regions: &[DocumentTextRegion], lines: &[String]) -> bool {
+    regions.len() == lines.len()
+        && regions
+            .iter()
+            .zip(lines)
+            .all(|(region, line)| region.text == *line)
 }
 
 #[derive(Debug, Clone, Copy)]
