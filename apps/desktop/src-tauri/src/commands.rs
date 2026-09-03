@@ -1,7 +1,8 @@
 use std::{cell::RefCell, path::Path};
 
 use document_extraction::{
-    extract_pages, extract_text, inspect_pdf, CanonicalOcr, ExtractionError, ReadingDocument,
+    extract_pages, extract_text, inspect_pdf, CanonicalOcr, CanonicalOcrResult, ExtractionError,
+    ReadingDocument,
 };
 use hayro::{
     hayro_interpret::InterpreterSettings, hayro_syntax::Pdf, render,
@@ -209,7 +210,7 @@ impl<'a, P> LocalPdfOcr<'a, P> {
 }
 
 impl<P: ProgressReporter> CanonicalOcr for LocalPdfOcr<'_, P> {
-    fn recognize_page(&self, page_number: u32) -> Result<String, ExtractionError> {
+    fn recognize_page(&self, page_number: u32) -> Result<CanonicalOcrResult, ExtractionError> {
         self.progress
             .report(ExtractionEvent::RecognizingPage { page_number });
         let pdf = Pdf::new(self.pdf.to_vec())
@@ -267,7 +268,7 @@ impl<P: ProgressReporter> CanonicalOcr for LocalPdfOcr<'_, P> {
             .as_mut()
             .ok_or_else(|| ocr_error(page_number, "OCR backend did not initialize"))?
             .recognize_image(&image, &request)
-            .map(|document| document.text)
+            .map(CanonicalOcrResult::Structured)
             .map_err(|error| ocr_error(page_number, error))
     }
 

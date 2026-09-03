@@ -14,12 +14,31 @@ export type DocumentTextEvidence =
   | "numericOnly"
   | "sequentialPageNumber";
 
+export type DocumentPixelSize = Readonly<{
+  width: number;
+  height: number;
+}>;
+
+export type DocumentPixelRegion = Readonly<{
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}>;
+
+export type OcrRegionEvidence = Readonly<{
+  blockKind: string | null;
+  confidence: number | null;
+  region: DocumentPixelRegion | null;
+}>;
+
 export type DocumentTextRegion = Readonly<{
   sourceLineIndex: number;
   text: string;
   role: DocumentTextRole;
   confidence: number | null;
   evidence: readonly DocumentTextEvidence[];
+  ocr?: OcrRegionEvidence | null;
   includeInReading: boolean;
 }>;
 
@@ -27,6 +46,7 @@ export type ExtractedPage = Readonly<{
   pageNumber: number;
   text: string;
   provenance: unknown;
+  sourceImageSize?: DocumentPixelSize | null;
   regions?: readonly DocumentTextRegion[];
 }>;
 
@@ -98,6 +118,7 @@ function isExtractedPage(value: unknown): value is ExtractedPage {
     typeof page.pageNumber === "number" &&
     typeof page.text === "string" &&
     "provenance" in page &&
+    (!("sourceImageSize" in page) || page.sourceImageSize === null || isDocumentPixelSize(page.sourceImageSize)) &&
     (!("regions" in page) || (Array.isArray(page.regions) && page.regions.every(isDocumentTextRegion)))
   );
 }
@@ -112,7 +133,35 @@ function isDocumentTextRegion(value: unknown): value is DocumentTextRegion {
     (region.confidence === null || Number.isInteger(region.confidence)) &&
     Array.isArray(region.evidence) &&
     region.evidence.every(isDocumentTextEvidence) &&
+    (!("ocr" in region) || region.ocr === null || isOcrRegionEvidence(region.ocr)) &&
     typeof region.includeInReading === "boolean"
+  );
+}
+
+function isOcrRegionEvidence(value: unknown): value is OcrRegionEvidence {
+  if (typeof value !== "object" || value === null) return false;
+  const evidence = value as Record<string, unknown>;
+  return (
+    (evidence.blockKind === null || typeof evidence.blockKind === "string") &&
+    (evidence.confidence === null || Number.isInteger(evidence.confidence)) &&
+    (evidence.region === null || isDocumentPixelRegion(evidence.region))
+  );
+}
+
+function isDocumentPixelSize(value: unknown): value is DocumentPixelSize {
+  if (typeof value !== "object" || value === null) return false;
+  const size = value as Record<string, unknown>;
+  return Number.isInteger(size.width) && Number.isInteger(size.height);
+}
+
+function isDocumentPixelRegion(value: unknown): value is DocumentPixelRegion {
+  if (typeof value !== "object" || value === null) return false;
+  const region = value as Record<string, unknown>;
+  return (
+    Number.isInteger(region.x) &&
+    Number.isInteger(region.y) &&
+    Number.isInteger(region.width) &&
+    Number.isInteger(region.height)
   );
 }
 
