@@ -38,6 +38,16 @@ export type DocumentPixelRegion = Readonly<{
   height: number;
 }>;
 
+export type DocumentColumn = Readonly<{
+  index: number;
+  bounds: DocumentPixelRegion;
+  regionIndices: readonly number[];
+}>;
+
+export type DocumentPageLayout = Readonly<{
+  columns: readonly DocumentColumn[];
+}>;
+
 export type OcrRegionEvidence = Readonly<{
   blockKind: string | null;
   confidence: number | null;
@@ -51,6 +61,7 @@ export type DocumentTextRegion = Readonly<{
   confidence: number | null;
   evidence: readonly DocumentTextEvidence[];
   ocr?: OcrRegionEvidence | null;
+  columnIndex?: number | null;
   includeInReading: boolean;
 }>;
 
@@ -59,6 +70,7 @@ export type ExtractedPage = Readonly<{
   text: string;
   provenance: unknown;
   sourceImageSize?: DocumentPixelSize | null;
+  layout?: DocumentPageLayout | null;
   regions?: readonly DocumentTextRegion[];
 }>;
 
@@ -131,6 +143,7 @@ function isExtractedPage(value: unknown): value is ExtractedPage {
     typeof page.text === "string" &&
     "provenance" in page &&
     (!("sourceImageSize" in page) || page.sourceImageSize === null || isDocumentPixelSize(page.sourceImageSize)) &&
+    (!("layout" in page) || page.layout === null || isDocumentPageLayout(page.layout)) &&
     (!("regions" in page) || (Array.isArray(page.regions) && page.regions.every(isDocumentTextRegion)))
   );
 }
@@ -146,7 +159,28 @@ function isDocumentTextRegion(value: unknown): value is DocumentTextRegion {
     Array.isArray(region.evidence) &&
     region.evidence.every(isDocumentTextEvidence) &&
     (!("ocr" in region) || region.ocr === null || isOcrRegionEvidence(region.ocr)) &&
+    (!("columnIndex" in region) ||
+      region.columnIndex === null ||
+      (Number.isInteger(region.columnIndex) && Number(region.columnIndex) >= 0)) &&
     typeof region.includeInReading === "boolean"
+  );
+}
+
+function isDocumentPageLayout(value: unknown): value is DocumentPageLayout {
+  if (typeof value !== "object" || value === null) return false;
+  const layout = value as Record<string, unknown>;
+  return Array.isArray(layout.columns) && layout.columns.every(isDocumentColumn);
+}
+
+function isDocumentColumn(value: unknown): value is DocumentColumn {
+  if (typeof value !== "object" || value === null) return false;
+  const column = value as Record<string, unknown>;
+  return (
+    Number.isInteger(column.index) &&
+    Number(column.index) >= 0 &&
+    isDocumentPixelRegion(column.bounds) &&
+    Array.isArray(column.regionIndices) &&
+    column.regionIndices.every((index) => Number.isInteger(index) && Number(index) >= 0)
   );
 }
 
