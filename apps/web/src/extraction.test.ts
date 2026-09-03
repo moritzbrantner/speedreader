@@ -30,9 +30,15 @@ test("projects a fully covered column-major reading order", () => {
 });
 
 test("falls back to cleaned source text when reading order is incomplete", () => {
-  const document = readingDocument([0, 2, 1]);
+  expect(readingText(readingDocument([0, 2, 1]))).toBe("Left 1\nRight 1\nLeft 2\nRight 2");
+});
 
-  expect(readingText(document)).toBe("Left 1\nRight 1\nLeft 2\nRight 2");
+test("falls back when reading order contains duplicate regions", () => {
+  expect(readingText(readingDocument([0, 2, 1, 1]))).toBe("Left 1\nRight 1\nLeft 2\nRight 2");
+});
+
+test("falls back when reading order references a missing region", () => {
+  expect(readingText(readingDocument([0, 2, 1, 99]))).toBe("Left 1\nRight 1\nLeft 2\nRight 2");
 });
 
 function readingDocument(regionIndices: readonly number[]): ReadingDocument {
