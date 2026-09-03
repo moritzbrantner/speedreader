@@ -11,6 +11,7 @@ export type DocumentTextRole =
   | "caption"
   | "table"
   | "form"
+  | "footnote"
   | "header"
   | "footer"
   | "pageNumber";
@@ -21,7 +22,9 @@ export type DocumentTextEvidence =
   | "repeatedAcrossPages"
   | "numericOnly"
   | "sequentialPageNumber"
-  | "ocrBlockHint";
+  | "ocrBlockHint"
+  | "bottomPageBand"
+  | "footnoteMarker";
 
 export type DocumentPixelSize = Readonly<{
   width: number;
@@ -181,6 +184,7 @@ function isDocumentTextRole(value: unknown): value is DocumentTextRole {
     value === "caption" ||
     value === "table" ||
     value === "form" ||
+    value === "footnote" ||
     value === "header" ||
     value === "footer" ||
     value === "pageNumber"
@@ -194,7 +198,9 @@ function isDocumentTextEvidence(value: unknown): value is DocumentTextEvidence {
     value === "repeatedAcrossPages" ||
     value === "numericOnly" ||
     value === "sequentialPageNumber" ||
-    value === "ocrBlockHint"
+    value === "ocrBlockHint" ||
+    value === "bottomPageBand" ||
+    value === "footnoteMarker"
   );
 }
 
