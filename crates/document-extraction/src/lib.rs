@@ -22,7 +22,7 @@ pub struct ExtractedPage {
     pub page_number: u32,
     pub text: String,
     pub provenance: ExtractionProvenance,
-    /// Pixel dimensions of the rendered source image when this page came from OCR.
+    /// Pixel dimensions of the rendered source image when structured OCR provides them.
     pub source_image_size: Option<DocumentPixelSize>,
     /// Source lines retained with their structural classification, including lines
     /// excluded from the speed-reading projection.
@@ -117,8 +117,16 @@ pub struct PageInput {
     pub embedded_text: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CanonicalOcrResult {
+    /// Text-only OCR output from adapters that do not provide structured evidence.
+    Text(String),
+    /// Canonical rich OCR output with optional layout, confidence, and block hints.
+    Structured(OcrDocument),
+}
+
 pub trait CanonicalOcr {
-    fn recognize_page(&self, page_number: u32) -> Result<OcrDocument, ExtractionError>;
+    fn recognize_page(&self, page_number: u32) -> Result<CanonicalOcrResult, ExtractionError>;
     fn preset(&self) -> OcrPreset;
 }
 
@@ -177,21 +185,25 @@ pub fn extract_pages(
     for page in pages {
         let normalized = normalize_whitespace(&page.embedded_text);
         let (text, provenance, source_image_size, regions) = if normalized.is_empty() {
-            let recognized = ocr.recognize_page(page.page_number)?;
-            let text = normalize_whitespace(&recognized.text);
-            let source_image_size = Some(DocumentPixelSize {
-                width: recognized.width,
-                height: recognized.height,
-            });
-            let regions = regions_from_ocr(&recognized, &text);
-            (
-                text,
-                ExtractionProvenance::CanonicalOcr {
-                    preset: ocr.preset().as_str().to_string(),
-                },
-                source_image_size,
-                regions,
-            )
+            let provenance = ExtractionProvenance::CanonicalOcr {
+                preset: ocr.preset().as_str().to_string(),
+            };
+            match ocr.recognize_page(page.page_number)? {
+                CanonicalOcrResult::Text(text) => {
+                    let text = normalize_whitespace(&text);
+                    let regions = regions_from_ocr_text(&text);
+                    (text, provenance, None, regions)
+                }
+                CanonicalOcrResult::Structured(document) => {
+                    let text = normalize_whitespace(&document.text);
+                    let source_image_size = Some(DocumentPixelSize {
+                        width: document.width,
+                        height: document.height,
+                    });
+                    let regions = regions_from_ocr(&document, &text);
+                    (text, provenance, source_image_size, regions)
+                }
+            }
         } else {
             let regions = regions_from_text(&normalized);
             (
@@ -328,6 +340,20 @@ fn regions_from_text(text: &str) -> Vec<DocumentTextRegion> {
             evidence: Vec::new(),
             ocr: None,
             include_in_reading: true,
+        })
+        .collect()
+}
+
+fn regions_from_ocr_text(text: &str) -> Vec<DocumentTextRegion> {
+    regions_from_text(text)
+        .into_iter()
+        .map(|mut region| {
+            region.ocr = Some(OcrRegionEvidence {
+                block_kind: None,
+                confidence: None,
+                region: None,
+            });
+            region
         })
         .collect()
 }
