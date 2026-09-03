@@ -26,6 +26,8 @@ pub struct ExtractedPage {
     pub source_image_size: Option<DocumentPixelSize>,
     /// Conservative page-layout structure derived from OCR geometry.
     pub layout: Option<DocumentPageLayout>,
+    /// Candidate reading order. The current reading projection still uses `text` unchanged.
+    pub reading_order: DocumentReadingOrder,
     /// Source lines retained with their structural classification, including lines
     /// excluded from the speed-reading projection.
     pub regions: Vec<DocumentTextRegion>,
@@ -62,6 +64,21 @@ pub struct DocumentColumn {
     pub bounds: DocumentPixelRegion,
     /// Indices into `ExtractedPage::regions`, in source-line order.
     pub region_indices: Vec<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentReadingOrder {
+    pub strategy: DocumentReadingOrderStrategy,
+    /// Indices into `ExtractedPage::regions` in the proposed reading sequence.
+    pub region_indices: Vec<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DocumentReadingOrderStrategy {
+    SourceOrder,
+    ColumnMajor,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -209,6 +226,7 @@ pub fn extract_text(text: &str) -> ReadingDocument {
         provenance: ExtractionProvenance::EmbeddedText,
         source_image_size: None,
         layout: None,
+        reading_order: empty_reading_order(),
         regions,
     }])
 }
@@ -255,10 +273,18 @@ pub fn extract_pages(
             provenance,
             source_image_size,
             layout: None,
+            reading_order: empty_reading_order(),
             regions,
         });
     }
     Ok(cleanup(extracted))
+}
+
+fn empty_reading_order() -> DocumentReadingOrder {
+    DocumentReadingOrder {
+        strategy: DocumentReadingOrderStrategy::SourceOrder,
+        region_indices: Vec::new(),
+    }
 }
 
 fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
@@ -344,6 +370,7 @@ fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
 
         page.layout = detect_page_layout(source_image_size, &mut regions);
         classify_sidebar_columns(source_image_size, page.layout.as_ref(), &mut regions);
+        page.reading_order = derive_reading_order(page.layout.as_ref(), &regions);
         page.text = regions
             .iter()
             .filter(|region| region.include_in_reading)
@@ -670,6 +697,160 @@ fn is_at_page_edge(bounds: DocumentPixelRegion, page_width: u32) -> bool {
     let right_edge = right.saturating_mul(100)
         >= u64::from(page_width).saturating_mul(90);
     left_edge || right_edge
+}
+
+fn derive_reading_order(
+    layout: Option<&DocumentPageLayout>,
+    regions: &[DocumentTextRegion],
+) -> DocumentReadingOrder {
+    let source = source_reading_order(regions);
+    let Some(layout) = layout else {
+        return source;
+    };
+
+    let mut body_columns = layout
+        .columns
+        .iter()
+        .filter(|column| column_has_role(column, regions, DocumentTextRole::Content))
+        .filter(|column| !column_has_role(column, regions, DocumentTextRole::Sidebar))
+        .collect::<Vec<_>>();
+    if body_columns.len() < 2 {
+        return source;
+    }
+    body_columns.sort_by_key(|column| column.index);
+
+    let mut sidebar_columns = layout
+        .columns
+        .iter()
+        .filter(|column| column_has_role(column, regions, DocumentTextRole::Sidebar))
+        .collect::<Vec<_>>();
+    sidebar_columns.sort_by_key(|column| column.index);
+
+    let body_top = body_columns
+        .iter()
+        .map(|column| column.bounds.y)
+        .min()
+        .unwrap_or(0);
+    let body_bottom = body_columns
+        .iter()
+        .map(|column| column.bounds.y.saturating_add(column.bounds.height))
+        .max()
+        .unwrap_or(0);
+
+    let assigned = body_columns
+        .iter()
+        .chain(sidebar_columns.iter().copied())
+        .flat_map(|column| column.region_indices.iter().copied())
+        .collect::<BTreeSet<_>>();
+    let mut prefix = Vec::new();
+    let mut suffix = Vec::new();
+
+    for region_index in &source.region_indices {
+        if assigned.contains(region_index) {
+            continue;
+        }
+        let Some(region) = regions.get(*region_index as usize) else {
+            return source;
+        };
+        let Some(bounds) = region.ocr.as_ref().and_then(|ocr| ocr.region) else {
+            return source;
+        };
+        match region.role {
+            DocumentTextRole::Heading
+                if bounds.y.saturating_add(bounds.height) <= body_top =>
+            {
+                prefix.push(*region_index);
+            }
+            DocumentTextRole::Footnote if bounds.y >= body_bottom => {
+                suffix.push(*region_index);
+            }
+            _ => return source,
+        }
+    }
+
+    sort_region_indices_by_geometry(&mut prefix, regions);
+    sort_region_indices_by_geometry(&mut suffix, regions);
+
+    let mut ordered = prefix;
+    for column in body_columns {
+        let mut indices = column
+            .region_indices
+            .iter()
+            .copied()
+            .filter(|index| {
+                regions
+                    .get(*index as usize)
+                    .is_some_and(|region| {
+                        region.include_in_reading && region.role == DocumentTextRole::Content
+                    })
+            })
+            .collect::<Vec<_>>();
+        sort_region_indices_by_geometry(&mut indices, regions);
+        ordered.extend(indices);
+    }
+    for column in sidebar_columns {
+        let mut indices = column
+            .region_indices
+            .iter()
+            .copied()
+            .filter(|index| {
+                regions
+                    .get(*index as usize)
+                    .is_some_and(|region| {
+                        region.include_in_reading && region.role == DocumentTextRole::Sidebar
+                    })
+            })
+            .collect::<Vec<_>>();
+        sort_region_indices_by_geometry(&mut indices, regions);
+        ordered.extend(indices);
+    }
+    ordered.extend(suffix);
+
+    let unique = ordered.iter().copied().collect::<BTreeSet<_>>();
+    if ordered.len() != source.region_indices.len() || unique.len() != ordered.len() {
+        return source;
+    }
+
+    DocumentReadingOrder {
+        strategy: DocumentReadingOrderStrategy::ColumnMajor,
+        region_indices: ordered,
+    }
+}
+
+fn source_reading_order(regions: &[DocumentTextRegion]) -> DocumentReadingOrder {
+    DocumentReadingOrder {
+        strategy: DocumentReadingOrderStrategy::SourceOrder,
+        region_indices: regions
+            .iter()
+            .enumerate()
+            .filter_map(|(index, region)| region.include_in_reading.then_some(index as u32))
+            .collect(),
+    }
+}
+
+fn column_has_role(
+    column: &DocumentColumn,
+    regions: &[DocumentTextRegion],
+    role: DocumentTextRole,
+) -> bool {
+    column.region_indices.iter().any(|index| {
+        regions
+            .get(*index as usize)
+            .is_some_and(|region| region.role == role)
+    })
+}
+
+fn sort_region_indices_by_geometry(indices: &mut [u32], regions: &[DocumentTextRegion]) {
+    indices.sort_by_key(|index| {
+        let bounds = regions
+            .get(*index as usize)
+            .and_then(|region| region.ocr.as_ref())
+            .and_then(|ocr| ocr.region);
+        match bounds {
+            Some(bounds) => (bounds.y, bounds.x, *index),
+            None => (u32::MAX, u32::MAX, *index),
+        }
+    });
 }
 
 fn layout_cluster_bounds(cluster: &[LayoutCandidate]) -> DocumentPixelRegion {
