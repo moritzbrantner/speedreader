@@ -5,10 +5,29 @@ export type ReadingDocument = Readonly<{
   diagnostics: readonly CleanupDiagnostic[];
 }>;
 
+export type DocumentTextRole = "content" | "header" | "footer" | "pageNumber";
+
+export type DocumentTextEvidence =
+  | "topMargin"
+  | "bottomMargin"
+  | "repeatedAcrossPages"
+  | "numericOnly"
+  | "sequentialPageNumber";
+
+export type DocumentTextRegion = Readonly<{
+  sourceLineIndex: number;
+  text: string;
+  role: DocumentTextRole;
+  confidence: number | null;
+  evidence: readonly DocumentTextEvidence[];
+  includeInReading: boolean;
+}>;
+
 export type ExtractedPage = Readonly<{
   pageNumber: number;
   text: string;
   provenance: unknown;
+  regions?: readonly DocumentTextRegion[];
 }>;
 
 export type CleanupDiagnostic = Readonly<{
@@ -46,7 +65,35 @@ function isExtractedPage(value: unknown): value is ExtractedPage {
     isRecord(value) &&
     Number.isInteger(value.pageNumber) &&
     typeof value.text === "string" &&
-    "provenance" in value
+    "provenance" in value &&
+    (!("regions" in value) || (Array.isArray(value.regions) && value.regions.every(isDocumentTextRegion)))
+  );
+}
+
+function isDocumentTextRegion(value: unknown): value is DocumentTextRegion {
+  return (
+    isRecord(value) &&
+    Number.isInteger(value.sourceLineIndex) &&
+    typeof value.text === "string" &&
+    isDocumentTextRole(value.role) &&
+    (value.confidence === null || Number.isInteger(value.confidence)) &&
+    Array.isArray(value.evidence) &&
+    value.evidence.every(isDocumentTextEvidence) &&
+    typeof value.includeInReading === "boolean"
+  );
+}
+
+function isDocumentTextRole(value: unknown): value is DocumentTextRole {
+  return value === "content" || value === "header" || value === "footer" || value === "pageNumber";
+}
+
+function isDocumentTextEvidence(value: unknown): value is DocumentTextEvidence {
+  return (
+    value === "topMargin" ||
+    value === "bottomMargin" ||
+    value === "repeatedAcrossPages" ||
+    value === "numericOnly" ||
+    value === "sequentialPageNumber"
   );
 }
 
