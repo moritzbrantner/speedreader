@@ -9,7 +9,7 @@ use hayro::{
 };
 use image_analysis_core::{ImagePixelFormat, ImageView};
 use image_analysis_ocr::{
-    OcrBackend, OcrLocalModelOptions, OcrPreset, OcrRequest, OnnxTrOcrBackend,
+    OcrBackend, OcrDocument, OcrLocalModelOptions, OcrPreset, OcrRequest, OnnxTrOcrBackend,
 };
 use serde::Serialize;
 use tauri::{ipc::Channel, AppHandle, Manager};
@@ -209,7 +209,7 @@ impl<'a, P> LocalPdfOcr<'a, P> {
 }
 
 impl<P: ProgressReporter> CanonicalOcr for LocalPdfOcr<'_, P> {
-    fn recognize_page(&self, page_number: u32) -> Result<String, ExtractionError> {
+    fn recognize_page(&self, page_number: u32) -> Result<OcrDocument, ExtractionError> {
         self.progress
             .report(ExtractionEvent::RecognizingPage { page_number });
         let pdf = Pdf::new(self.pdf.to_vec())
@@ -267,7 +267,6 @@ impl<P: ProgressReporter> CanonicalOcr for LocalPdfOcr<'_, P> {
             .as_mut()
             .ok_or_else(|| ocr_error(page_number, "OCR backend did not initialize"))?
             .recognize_image(&image, &request)
-            .map(|document| document.text)
             .map_err(|error| ocr_error(page_number, error))
     }
 
