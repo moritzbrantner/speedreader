@@ -101,6 +101,7 @@ pub enum DocumentTextRole {
     Table,
     Form,
     Footnote,
+    Sidebar,
     Header,
     Footer,
     PageNumber,
@@ -117,6 +118,10 @@ pub enum DocumentTextEvidence {
     OcrBlockHint,
     BottomPageBand,
     FootnoteMarker,
+    NarrowLayoutColumn,
+    PageEdge,
+    ParallelBodyColumn,
+    SecondaryColumnSupport,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -338,6 +343,7 @@ fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
         }
 
         page.layout = detect_page_layout(source_image_size, &mut regions);
+        classify_sidebar_columns(source_image_size, page.layout.as_ref(), &mut regions);
         page.text = regions
             .iter()
             .filter(|region| region.include_in_reading)
@@ -577,6 +583,93 @@ fn detect_page_layout(
     }
 
     Some(DocumentPageLayout { columns })
+}
+
+fn classify_sidebar_columns(
+    source_image_size: Option<DocumentPixelSize>,
+    layout: Option<&DocumentPageLayout>,
+    regions: &mut [DocumentTextRegion],
+) {
+    let (Some(page_size), Some(layout)) = (source_image_size, layout) else {
+        return;
+    };
+    if page_size.width == 0 || layout.columns.len() < 2 {
+        return;
+    }
+
+    let widest = layout
+        .columns
+        .iter()
+        .map(|column| column.bounds.width)
+        .max()
+        .unwrap_or(0);
+    if widest == 0 {
+        return;
+    }
+
+    let sidebar_indices = layout
+        .columns
+        .iter()
+        .filter(|column| is_narrow_sidebar_candidate(column, page_size, widest, &layout.columns))
+        .map(|column| column.region_indices.clone())
+        .collect::<Vec<_>>();
+
+    for region_indices in sidebar_indices {
+        for region_index in region_indices {
+            let Some(region) = regions.get_mut(region_index as usize) else {
+                continue;
+            };
+            if region.role != DocumentTextRole::Content {
+                continue;
+            }
+            region.role = DocumentTextRole::Sidebar;
+            region.confidence = None;
+            region.evidence = vec![
+                DocumentTextEvidence::NarrowLayoutColumn,
+                DocumentTextEvidence::PageEdge,
+                DocumentTextEvidence::ParallelBodyColumn,
+                DocumentTextEvidence::SecondaryColumnSupport,
+            ];
+        }
+    }
+}
+
+fn is_narrow_sidebar_candidate(
+    candidate: &DocumentColumn,
+    page_size: DocumentPixelSize,
+    widest: u32,
+    columns: &[DocumentColumn],
+) -> bool {
+    let bounds = candidate.bounds;
+    let narrow_for_page = u64::from(bounds.width).saturating_mul(100)
+        <= u64::from(page_size.width).saturating_mul(25);
+    let narrow_relative_to_body = u64::from(bounds.width).saturating_mul(100)
+        <= u64::from(widest).saturating_mul(55);
+    if !narrow_for_page || !narrow_relative_to_body || !is_at_page_edge(bounds, page_size.width) {
+        return false;
+    }
+
+    columns.iter().any(|body| {
+        if body.index == candidate.index || body.bounds.width <= candidate.bounds.width {
+            return false;
+        }
+        let body_is_substantial = u64::from(body.bounds.width).saturating_mul(100)
+            >= u64::from(page_size.width).saturating_mul(30);
+        let secondary_support = candidate.region_indices.len().saturating_mul(2)
+            <= body.region_indices.len();
+        body_is_substantial
+            && secondary_support
+            && vertically_overlaps(candidate.bounds, body.bounds)
+    })
+}
+
+fn is_at_page_edge(bounds: DocumentPixelRegion, page_width: u32) -> bool {
+    let left_edge = u64::from(bounds.x).saturating_mul(100)
+        <= u64::from(page_width).saturating_mul(10);
+    let right = u64::from(bounds.x) + u64::from(bounds.width);
+    let right_edge = right.saturating_mul(100)
+        >= u64::from(page_width).saturating_mul(90);
+    left_edge || right_edge
 }
 
 fn layout_cluster_bounds(cluster: &[LayoutCandidate]) -> DocumentPixelRegion {
