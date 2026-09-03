@@ -99,6 +99,36 @@ export type ExtractionResult =
 
 type Fetch = (input: string, init: RequestInit) => Promise<Response>;
 
+export function readingText(document: ReadingDocument): string {
+  if (document.pages.length === 0) return document.text;
+  return document.pages
+    .map(readingPageText)
+    .filter((text) => text !== "")
+    .join("\n\n");
+}
+
+function readingPageText(page: ExtractedPage): string {
+  if (page.readingOrder?.strategy !== "columnMajor" || page.regions === undefined) return page.text;
+
+  const readable = page.regions
+    .map((region, index) => region.includeInReading ? index : undefined)
+    .filter((index): index is number => index !== undefined);
+  const order = page.readingOrder.regionIndices;
+  if (order.length !== readable.length) return page.text;
+
+  const seen = new Set<number>();
+  const text: string[] = [];
+  for (const index of order) {
+    if (seen.has(index)) return page.text;
+    const region = page.regions[index];
+    if (region === undefined || !region.includeInReading) return page.text;
+    seen.add(index);
+    text.push(region.text);
+  }
+  if (readable.some((index) => !seen.has(index))) return page.text;
+  return text.join("\n");
+}
+
 export async function extractPdfDocument(
   file: Blob,
   serviceUrl: string | undefined,
