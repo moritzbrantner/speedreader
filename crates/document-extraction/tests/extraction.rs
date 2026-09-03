@@ -1,6 +1,7 @@
 use document_extraction::{
-    extract_pages, extract_pdf, extract_text, CanonicalOcr, DocumentPixelRegion, DocumentPixelSize,
-    DocumentTextEvidence, DocumentTextRole, ExtractionError, ExtractionProvenance, PageInput,
+    extract_pages, extract_pdf, extract_text, CanonicalOcr, CanonicalOcrResult,
+    DocumentPixelRegion, DocumentPixelSize, DocumentTextEvidence, DocumentTextRole,
+    ExtractionError, ExtractionProvenance, PageInput,
 };
 use image_analysis_ocr::{OcrDocument, OcrPreset};
 use lopdf::{dictionary, Document, Object, Stream};
@@ -25,8 +26,10 @@ fn creates_the_shared_document_contract_for_plain_text() {
 }
 
 impl CanonicalOcr for FixtureOcr {
-    fn recognize_page(&self, page_number: u32) -> Result<OcrDocument, ExtractionError> {
-        Ok(OcrDocument::new(format!("scanned page {page_number}"), 640, 480).unwrap())
+    fn recognize_page(&self, page_number: u32) -> Result<CanonicalOcrResult, ExtractionError> {
+        Ok(CanonicalOcrResult::Text(format!(
+            "scanned page {page_number}"
+        )))
     }
 
     fn preset(&self) -> OcrPreset {
@@ -63,17 +66,12 @@ fn extracts_a_text_layer_pdf_without_invoking_ocr() {
 }
 
 #[test]
-fn extracts_a_scanned_pdf_through_the_canonical_ocr_adapter() {
+fn extracts_a_scanned_pdf_through_a_text_only_canonical_ocr_adapter() {
     let document = extract_pdf(&pdf_with_pages(&[None]), &FixtureOcr).unwrap();
 
     assert_eq!(document.text, "scanned page 1");
-    assert_eq!(
-        document.pages[0].source_image_size,
-        Some(DocumentPixelSize {
-            width: 640,
-            height: 480
-        })
-    );
+    assert_eq!(document.pages[0].source_image_size, None);
+    assert!(document.pages[0].regions[0].ocr.is_some());
     assert_eq!(
         document.pages[0].provenance,
         ExtractionProvenance::CanonicalOcr {
@@ -112,8 +110,8 @@ fn retains_structured_ocr_geometry_confidence_and_block_kind_as_source_evidence(
     struct StructuredOcr;
 
     impl CanonicalOcr for StructuredOcr {
-        fn recognize_page(&self, _page_number: u32) -> Result<OcrDocument, ExtractionError> {
-            Ok(serde_json::from_value(serde_json::json!({
+        fn recognize_page(&self, _page_number: u32) -> Result<CanonicalOcrResult, ExtractionError> {
+            let document: OcrDocument = serde_json::from_value(serde_json::json!({
                 "text": "Chapter One\nBody text",
                 "width": 1000,
                 "height": 1400,
@@ -147,7 +145,8 @@ fn retains_structured_ocr_geometry_confidence_and_block_kind_as_source_evidence(
                 ],
                 "attributes": {}
             }))
-            .unwrap())
+            .unwrap();
+            Ok(CanonicalOcrResult::Structured(document))
         }
 
         fn preset(&self) -> OcrPreset {
