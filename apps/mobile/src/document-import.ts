@@ -1,4 +1,4 @@
-import type { PdfExtractionAdapter } from "./document-extraction";
+import { readingText, type PdfExtractionAdapter } from "./document-extraction";
 
 export const supportedDocumentMimeTypes = [
   "text/plain",
@@ -71,7 +71,7 @@ export function createDocumentImportAdapter(
         return {
           status: "imported",
           fileName: picked.document.name,
-          text: extraction.document.text,
+          text: readingText(extraction.document),
           source: "pdf",
           pageCount: extraction.document.pages.length,
         };
