@@ -60,7 +60,7 @@ pub struct DocumentColumn {
     pub index: u32,
     /// Union of the OCR regions assigned to this column.
     pub bounds: DocumentPixelRegion,
-    /// Indices into `ExtractedPage::regions` assigned to this column.
+    /// Indices into `ExtractedPage::regions`, in source-line order.
     pub region_indices: Vec<u32>,
 }
 
@@ -561,12 +561,13 @@ fn detect_page_layout(
     for (column_index, cluster) in clusters.into_iter().enumerate() {
         let index = column_index as u32;
         let bounds = layout_cluster_bounds(&cluster);
-        let region_indices = cluster
+        let mut region_indices = cluster
             .iter()
             .map(|candidate| candidate.0 as u32)
             .collect::<Vec<_>>();
-        for candidate in &cluster {
-            regions[candidate.0].column_index = Some(index);
+        region_indices.sort_unstable();
+        for region_index in &region_indices {
+            regions[*region_index as usize].column_index = Some(index);
         }
         columns.push(DocumentColumn {
             index,
