@@ -5,10 +5,29 @@ export type ReadingDocument = Readonly<{
   diagnostics: readonly CleanupDiagnostic[];
 }>;
 
+export type DocumentTextRole = "content" | "header" | "footer" | "pageNumber";
+
+export type DocumentTextEvidence =
+  | "topMargin"
+  | "bottomMargin"
+  | "repeatedAcrossPages"
+  | "numericOnly"
+  | "sequentialPageNumber";
+
+export type DocumentTextRegion = Readonly<{
+  sourceLineIndex: number;
+  text: string;
+  role: DocumentTextRole;
+  confidence: number | null;
+  evidence: readonly DocumentTextEvidence[];
+  includeInReading: boolean;
+}>;
+
 export type ExtractedPage = Readonly<{
   pageNumber: number;
   text: string;
   provenance: unknown;
+  regions?: readonly DocumentTextRegion[];
 }>;
 
 export type CleanupDiagnostic = Readonly<{
@@ -75,7 +94,40 @@ export function isReadingDocument(value: unknown): value is ReadingDocument {
 function isExtractedPage(value: unknown): value is ExtractedPage {
   if (typeof value !== "object" || value === null) return false;
   const page = value as Record<string, unknown>;
-  return typeof page.pageNumber === "number" && typeof page.text === "string" && "provenance" in page;
+  return (
+    typeof page.pageNumber === "number" &&
+    typeof page.text === "string" &&
+    "provenance" in page &&
+    (!("regions" in page) || (Array.isArray(page.regions) && page.regions.every(isDocumentTextRegion)))
+  );
+}
+
+function isDocumentTextRegion(value: unknown): value is DocumentTextRegion {
+  if (typeof value !== "object" || value === null) return false;
+  const region = value as Record<string, unknown>;
+  return (
+    Number.isInteger(region.sourceLineIndex) &&
+    typeof region.text === "string" &&
+    isDocumentTextRole(region.role) &&
+    (region.confidence === null || Number.isInteger(region.confidence)) &&
+    Array.isArray(region.evidence) &&
+    region.evidence.every(isDocumentTextEvidence) &&
+    typeof region.includeInReading === "boolean"
+  );
+}
+
+function isDocumentTextRole(value: unknown): value is DocumentTextRole {
+  return value === "content" || value === "header" || value === "footer" || value === "pageNumber";
+}
+
+function isDocumentTextEvidence(value: unknown): value is DocumentTextEvidence {
+  return (
+    value === "topMargin" ||
+    value === "bottomMargin" ||
+    value === "repeatedAcrossPages" ||
+    value === "numericOnly" ||
+    value === "sequentialPageNumber"
+  );
 }
 
 function isCleanupDiagnostic(value: unknown): value is CleanupDiagnostic {

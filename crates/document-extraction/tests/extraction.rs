@@ -1,6 +1,6 @@
 use document_extraction::{
-    extract_pages, extract_pdf, extract_text, CanonicalOcr, ExtractionError, ExtractionProvenance,
-    PageInput,
+    extract_pages, extract_pdf, extract_text, CanonicalOcr, DocumentTextEvidence, DocumentTextRole,
+    ExtractionError, ExtractionProvenance, PageInput,
 };
 use image_analysis_ocr::OcrPreset;
 use lopdf::{dictionary, Document, Object, Stream};
@@ -14,6 +14,8 @@ fn creates_the_shared_document_contract_for_plain_text() {
     assert_eq!(document.version, 1);
     assert_eq!(document.text, "Hello local\nreader");
     assert_eq!(document.pages.len(), 1);
+    assert_eq!(document.pages[0].regions.len(), 2);
+    assert_eq!(document.pages[0].regions[0].role, DocumentTextRole::Content);
     assert_eq!(
         document.pages[0].provenance,
         ExtractionProvenance::EmbeddedText
@@ -97,7 +99,7 @@ fn uses_canonical_ocr_for_scanned_pages_and_keeps_page_provenance() {
 }
 
 #[test]
-fn removes_recurring_margins_and_page_numbers_deterministically() {
+fn classifies_recurring_headers_and_page_numbers_without_discarding_source_lines() {
     let document = extract_pages(
         [
             PageInput {
@@ -112,8 +114,89 @@ fn removes_recurring_margins_and_page_numbers_deterministically() {
         &FixtureOcr,
     )
     .unwrap();
+
     assert_eq!(document.text, "First body\n\nSecond body");
     assert_eq!(document.diagnostics.len(), 3);
+
+    let header = &document.pages[0].regions[0];
+    assert_eq!(header.text, "Magazine");
+    assert_eq!(header.role, DocumentTextRole::Header);
+    assert!(!header.include_in_reading);
+    assert_eq!(
+        header.evidence,
+        vec![
+            DocumentTextEvidence::TopMargin,
+            DocumentTextEvidence::RepeatedAcrossPages
+        ]
+    );
+
+    let page_number = &document.pages[0].regions[2];
+    assert_eq!(page_number.text, "1");
+    assert_eq!(page_number.role, DocumentTextRole::PageNumber);
+    assert!(!page_number.include_in_reading);
+    assert!(page_number
+        .evidence
+        .contains(&DocumentTextEvidence::SequentialPageNumber));
+}
+
+#[test]
+fn classifies_footer_behind_a_page_number() {
+    let document = extract_pages(
+        [
+            PageInput {
+                page_number: 1,
+                embedded_text: "Magazine\nFirst body\nCopyright Example\n10".into(),
+            },
+            PageInput {
+                page_number: 2,
+                embedded_text: "Magazine\nSecond body\nCopyright Example\n11".into(),
+            },
+        ],
+        &FixtureOcr,
+    )
+    .unwrap();
+
+    assert_eq!(document.text, "First body\n\nSecond body");
+    let footer = document.pages[0]
+        .regions
+        .iter()
+        .find(|region| region.text == "Copyright Example")
+        .unwrap();
+    assert_eq!(footer.role, DocumentTextRole::Footer);
+    assert_eq!(
+        footer.evidence,
+        vec![
+            DocumentTextEvidence::BottomMargin,
+            DocumentTextEvidence::RepeatedAcrossPages
+        ]
+    );
+}
+
+#[test]
+fn keeps_numeric_content_that_is_not_a_page_number() {
+    let document = extract_pages(
+        [
+            PageInput {
+                page_number: 1,
+                embedded_text: "Magazine\nRevenue\n2026\n10".into(),
+            },
+            PageInput {
+                page_number: 2,
+                embedded_text: "Magazine\nRevenue forecast\n2027\n11".into(),
+            },
+        ],
+        &FixtureOcr,
+    )
+    .unwrap();
+
+    assert_eq!(document.text, "Revenue\n2026\n\nRevenue forecast\n2027");
+    let numeric_content = document.pages[0]
+        .regions
+        .iter()
+        .find(|region| region.text == "2026")
+        .unwrap();
+    assert_eq!(numeric_content.role, DocumentTextRole::Content);
+    assert!(numeric_content.include_in_reading);
 }
 
 fn pdf_with_pages(texts: &[Option<&str>]) -> Vec<u8> {

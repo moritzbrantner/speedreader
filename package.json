@@ -5,10 +5,11 @@
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "build": "turbo run build",
-    "ci": "bun run lint && bun run typecheck && bun run test && bun run build && bun run cargo:check",
+    "ci": "bun run lint && bun run typecheck && bun run test && bun run document-extraction:test && bun run build && bun run cargo:check",
     "cargo:check": "cargo check --workspace",
     "desktop:build": "bun --filter @speedreader/desktop build",
     "desktop:bundle": "bun --filter @speedreader/desktop bundle",
+    "document-extraction:test": "cargo test -p document-extraction",
     "lint": "turbo run lint",
     "test": "turbo run test && bun test tests",
     "typecheck": "turbo run typecheck"
