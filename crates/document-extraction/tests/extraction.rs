@@ -1,8 +1,8 @@
 use document_extraction::{
-    extract_pages, extract_pdf, extract_text, CanonicalOcr, DocumentTextEvidence, DocumentTextRole,
-    ExtractionError, ExtractionProvenance, PageInput,
+    extract_pages, extract_pdf, extract_text, CanonicalOcr, DocumentPixelRegion, DocumentPixelSize,
+    DocumentTextEvidence, DocumentTextRole, ExtractionError, ExtractionProvenance, PageInput,
 };
-use image_analysis_ocr::OcrPreset;
+use image_analysis_ocr::{OcrDocument, OcrPreset};
 use lopdf::{dictionary, Document, Object, Stream};
 
 struct FixtureOcr;
@@ -16,6 +16,8 @@ fn creates_the_shared_document_contract_for_plain_text() {
     assert_eq!(document.pages.len(), 1);
     assert_eq!(document.pages[0].regions.len(), 2);
     assert_eq!(document.pages[0].regions[0].role, DocumentTextRole::Content);
+    assert_eq!(document.pages[0].source_image_size, None);
+    assert_eq!(document.pages[0].regions[0].ocr, None);
     assert_eq!(
         document.pages[0].provenance,
         ExtractionProvenance::EmbeddedText
@@ -23,8 +25,8 @@ fn creates_the_shared_document_contract_for_plain_text() {
 }
 
 impl CanonicalOcr for FixtureOcr {
-    fn recognize_page(&self, page_number: u32) -> Result<String, ExtractionError> {
-        Ok(format!("scanned page {page_number}"))
+    fn recognize_page(&self, page_number: u32) -> Result<OcrDocument, ExtractionError> {
+        Ok(OcrDocument::new(format!("scanned page {page_number}"), 640, 480).unwrap())
     }
 
     fn preset(&self) -> OcrPreset {
@@ -66,6 +68,13 @@ fn extracts_a_scanned_pdf_through_the_canonical_ocr_adapter() {
 
     assert_eq!(document.text, "scanned page 1");
     assert_eq!(
+        document.pages[0].source_image_size,
+        Some(DocumentPixelSize {
+            width: 640,
+            height: 480
+        })
+    );
+    assert_eq!(
         document.pages[0].provenance,
         ExtractionProvenance::CanonicalOcr {
             preset: "trocr-base-printed-onnx".into()
@@ -95,6 +104,100 @@ fn uses_canonical_ocr_for_scanned_pages_and_keeps_page_provenance() {
         ExtractionProvenance::CanonicalOcr {
             preset: "trocr-base-printed-onnx".into()
         }
+    );
+}
+
+#[test]
+fn retains_structured_ocr_geometry_confidence_and_block_kind_as_source_evidence() {
+    struct StructuredOcr;
+
+    impl CanonicalOcr for StructuredOcr {
+        fn recognize_page(&self, _page_number: u32) -> Result<OcrDocument, ExtractionError> {
+            Ok(serde_json::from_value(serde_json::json!({
+                "text": "Chapter One\nBody text",
+                "width": 1000,
+                "height": 1400,
+                "language": "en",
+                "confidence": 80,
+                "blocks": [
+                    {
+                        "kind": "heading",
+                        "text": "Chapter One",
+                        "region": {"x": 20, "y": 30, "width": 400, "height": 60},
+                        "confidence": 91,
+                        "lines": [
+                            {
+                                "text": "Chapter One",
+                                "region": {"x": 22, "y": 32, "width": 390, "height": 50},
+                                "confidence": 95,
+                                "tokens": [],
+                                "attributes": {}
+                            }
+                        ],
+                        "attributes": {}
+                    },
+                    {
+                        "kind": "paragraph",
+                        "text": "Body text",
+                        "region": {"x": 40, "y": 120, "width": 800, "height": 160},
+                        "confidence": 88,
+                        "lines": [],
+                        "attributes": {}
+                    }
+                ],
+                "attributes": {}
+            }))
+            .unwrap())
+        }
+
+        fn preset(&self) -> OcrPreset {
+            OcrPreset::TrOcrBasePrintedOnnx
+        }
+    }
+
+    let document = extract_pages(
+        [PageInput {
+            page_number: 1,
+            embedded_text: String::new(),
+        }],
+        &StructuredOcr,
+    )
+    .unwrap();
+
+    assert_eq!(document.text, "Chapter One\nBody text");
+    assert_eq!(
+        document.pages[0].source_image_size,
+        Some(DocumentPixelSize {
+            width: 1000,
+            height: 1400
+        })
+    );
+
+    let heading = document.pages[0].regions[0].ocr.as_ref().unwrap();
+    assert_eq!(heading.block_kind.as_deref(), Some("heading"));
+    assert_eq!(heading.confidence, Some(95));
+    assert_eq!(
+        heading.region,
+        Some(DocumentPixelRegion {
+            x: 22,
+            y: 32,
+            width: 390,
+            height: 50
+        })
+    );
+    assert_eq!(document.pages[0].regions[0].confidence, None);
+
+    let body = document.pages[0].regions[1].ocr.as_ref().unwrap();
+    assert_eq!(body.block_kind.as_deref(), Some("paragraph"));
+    assert_eq!(body.confidence, Some(88));
+    assert_eq!(
+        body.region,
+        Some(DocumentPixelRegion {
+            x: 40,
+            y: 120,
+            width: 800,
+            height: 160
+        })
     );
 }
 
