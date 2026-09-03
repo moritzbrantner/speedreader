@@ -24,6 +24,8 @@ pub struct ExtractedPage {
     pub provenance: ExtractionProvenance,
     /// Pixel dimensions of the rendered source image when structured OCR provides them.
     pub source_image_size: Option<DocumentPixelSize>,
+    /// Conservative page-layout structure derived from OCR geometry.
+    pub layout: Option<DocumentPageLayout>,
     /// Source lines retained with their structural classification, including lines
     /// excluded from the speed-reading projection.
     pub regions: Vec<DocumentTextRegion>,
@@ -43,6 +45,23 @@ pub struct DocumentPixelRegion {
     pub y: u32,
     pub width: u32,
     pub height: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentPageLayout {
+    pub columns: Vec<DocumentColumn>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentColumn {
+    /// Zero-based left-to-right column index within this page layout.
+    pub index: u32,
+    /// Union of the OCR regions assigned to this column.
+    pub bounds: DocumentPixelRegion,
+    /// Indices into `ExtractedPage::regions`, in source-line order.
+    pub region_indices: Vec<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -67,6 +86,8 @@ pub struct DocumentTextRegion {
     pub evidence: Vec<DocumentTextEvidence>,
     /// OCR-owned evidence retained independently from product structural roles.
     pub ocr: Option<OcrRegionEvidence>,
+    /// Zero-based membership in `ExtractedPage::layout.columns`, when detected.
+    pub column_index: Option<u32>,
     pub include_in_reading: bool,
 }
 
@@ -182,6 +203,7 @@ pub fn extract_text(text: &str) -> ReadingDocument {
         text,
         provenance: ExtractionProvenance::EmbeddedText,
         source_image_size: None,
+        layout: None,
         regions,
     }])
 }
@@ -227,6 +249,7 @@ pub fn extract_pages(
             text,
             provenance,
             source_image_size,
+            layout: None,
             regions,
         });
     }
@@ -310,9 +333,11 @@ fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
             region.role = role;
             region.confidence = confidence;
             region.evidence = evidence;
+            region.column_index = None;
             region.include_in_reading = include_in_reading;
         }
 
+        page.layout = detect_page_layout(source_image_size, &mut regions);
         page.text = regions
             .iter()
             .filter(|region| region.include_in_reading)
@@ -431,6 +456,165 @@ fn has_footnote_marker(text: &str) -> bool {
     rest[1..].chars().any(char::is_alphabetic)
 }
 
+type LayoutCandidate = (usize, DocumentPixelRegion, u64);
+
+fn detect_page_layout(
+    source_image_size: Option<DocumentPixelSize>,
+    regions: &mut [DocumentTextRegion],
+) -> Option<DocumentPageLayout> {
+    for region in regions.iter_mut() {
+        region.column_index = None;
+    }
+
+    let page_size = source_image_size?;
+    if page_size.width == 0 || page_size.height == 0 {
+        return None;
+    }
+
+    let mut candidates = regions
+        .iter()
+        .enumerate()
+        .filter_map(|(region_index, region)| {
+            if region.role != DocumentTextRole::Content {
+                return None;
+            }
+            let bounds = region.ocr.as_ref()?.region?;
+            if bounds.width == 0 || bounds.height == 0 {
+                return None;
+            }
+            let center_x = u64::from(bounds.x) + u64::from(bounds.width) / 2;
+            Some((region_index, bounds, center_x))
+        })
+        .collect::<Vec<_>>();
+
+    if candidates.len() < 2 {
+        return None;
+    }
+    candidates.sort_by_key(|candidate| candidate.2);
+
+    // Centers separated by more than 20% of the page width start a new horizontal cluster.
+    // This avoids broad/spanning lines acting as bridges between otherwise distinct columns.
+    let split_gap = (u64::from(page_size.width) / 5).max(1);
+    let mut clusters: Vec<Vec<LayoutCandidate>> = Vec::new();
+    for candidate in candidates {
+        if let Some(cluster) = clusters.last_mut() {
+            let previous_center = cluster
+                .last()
+                .map(|candidate| candidate.2)
+                .unwrap_or(candidate.2);
+            if candidate.2.saturating_sub(previous_center) <= split_gap {
+                cluster.push(candidate);
+                continue;
+            }
+        }
+        clusters.push(vec![candidate]);
+    }
+
+    // One-off marginal blocks are deliberately not treated as columns. A column needs
+    // repeated geometric support before it can participate in later sidebar reasoning.
+    clusters.retain(|cluster| cluster.len() >= 2);
+    if clusters.is_empty() {
+        return None;
+    }
+
+    if clusters.len() > 1 {
+        let bounds = clusters
+            .iter()
+            .map(|cluster| layout_cluster_bounds(cluster))
+            .collect::<Vec<_>>();
+        let mut overlaps_another = vec![false; clusters.len()];
+        for left in 0..clusters.len() {
+            for right in left + 1..clusters.len() {
+                if vertically_overlaps(bounds[left], bounds[right]) {
+                    overlaps_another[left] = true;
+                    overlaps_another[right] = true;
+                }
+            }
+        }
+
+        let overlapping_count = overlaps_another.iter().filter(|overlaps| **overlaps).count();
+        if overlapping_count >= 2 {
+            clusters = clusters
+                .into_iter()
+                .zip(overlaps_another)
+                .filter_map(|(cluster, overlaps)| overlaps.then_some(cluster))
+                .collect();
+        } else {
+            // Horizontally separated blocks that occur in different vertical sections are
+            // indentation/layout changes, not simultaneous columns. Keep only the most
+            // strongly supported cluster as the single-column page structure.
+            let strongest = clusters
+                .into_iter()
+                .max_by(|left, right| {
+                    left.len().cmp(&right.len()).then_with(|| {
+                        layout_cluster_bounds(right)
+                            .x
+                            .cmp(&layout_cluster_bounds(left).x)
+                    })
+                })?;
+            clusters = vec![strongest];
+        }
+    }
+
+    clusters.sort_by_key(|cluster| layout_cluster_bounds(cluster).x);
+    let mut columns = Vec::with_capacity(clusters.len());
+    for (column_index, cluster) in clusters.into_iter().enumerate() {
+        let index = column_index as u32;
+        let bounds = layout_cluster_bounds(&cluster);
+        let mut region_indices = cluster
+            .iter()
+            .map(|candidate| candidate.0 as u32)
+            .collect::<Vec<_>>();
+        region_indices.sort_unstable();
+        for region_index in &region_indices {
+            regions[*region_index as usize].column_index = Some(index);
+        }
+        columns.push(DocumentColumn {
+            index,
+            bounds,
+            region_indices,
+        });
+    }
+
+    Some(DocumentPageLayout { columns })
+}
+
+fn layout_cluster_bounds(cluster: &[LayoutCandidate]) -> DocumentPixelRegion {
+    let left = cluster
+        .iter()
+        .map(|candidate| candidate.1.x)
+        .min()
+        .unwrap_or(0);
+    let top = cluster
+        .iter()
+        .map(|candidate| candidate.1.y)
+        .min()
+        .unwrap_or(0);
+    let right = cluster
+        .iter()
+        .map(|candidate| candidate.1.x.saturating_add(candidate.1.width))
+        .max()
+        .unwrap_or(left);
+    let bottom = cluster
+        .iter()
+        .map(|candidate| candidate.1.y.saturating_add(candidate.1.height))
+        .max()
+        .unwrap_or(top);
+
+    DocumentPixelRegion {
+        x: left,
+        y: top,
+        width: right.saturating_sub(left),
+        height: bottom.saturating_sub(top),
+    }
+}
+
+fn vertically_overlaps(left: DocumentPixelRegion, right: DocumentPixelRegion) -> bool {
+    let left_bottom = left.y.saturating_add(left.height);
+    let right_bottom = right.y.saturating_add(right.height);
+    left.y < right_bottom && right.y < left_bottom
+}
+
 #[derive(Debug, Clone)]
 struct OcrLineMetadata {
     text: String,
@@ -447,6 +631,7 @@ fn regions_from_text(text: &str) -> Vec<DocumentTextRegion> {
             confidence: None,
             evidence: Vec::new(),
             ocr: None,
+            column_index: None,
             include_in_reading: true,
         })
         .collect()
@@ -497,6 +682,7 @@ fn regions_from_ocr(document: &OcrDocument, normalized_text: &str) -> Vec<Docume
                 confidence: None,
                 evidence: Vec::new(),
                 ocr: Some(ocr),
+                column_index: None,
                 include_in_reading: true,
             }
         })

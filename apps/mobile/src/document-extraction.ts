@@ -38,6 +38,16 @@ export type DocumentPixelRegion = Readonly<{
   height: number;
 }>;
 
+export type DocumentColumn = Readonly<{
+  index: number;
+  bounds: DocumentPixelRegion;
+  regionIndices: readonly number[];
+}>;
+
+export type DocumentPageLayout = Readonly<{
+  columns: readonly DocumentColumn[];
+}>;
+
 export type OcrRegionEvidence = Readonly<{
   blockKind: string | null;
   confidence: number | null;
@@ -51,6 +61,7 @@ export type DocumentTextRegion = Readonly<{
   confidence: number | null;
   evidence: readonly DocumentTextEvidence[];
   ocr?: OcrRegionEvidence | null;
+  columnIndex?: number | null;
   includeInReading: boolean;
 }>;
 
@@ -59,6 +70,7 @@ export type ExtractedPage = Readonly<{
   text: string;
   provenance: unknown;
   sourceImageSize?: DocumentPixelSize | null;
+  layout?: DocumentPageLayout | null;
   regions?: readonly DocumentTextRegion[];
 }>;
 
@@ -101,6 +113,7 @@ function isExtractedPage(value: unknown): value is ExtractedPage {
     (!("sourceImageSize" in value) ||
       value.sourceImageSize === null ||
       isDocumentPixelSize(value.sourceImageSize)) &&
+    (!("layout" in value) || value.layout === null || isDocumentPageLayout(value.layout)) &&
     (!("regions" in value) || (Array.isArray(value.regions) && value.regions.every(isDocumentTextRegion)))
   );
 }
@@ -115,7 +128,25 @@ function isDocumentTextRegion(value: unknown): value is DocumentTextRegion {
     Array.isArray(value.evidence) &&
     value.evidence.every(isDocumentTextEvidence) &&
     (!("ocr" in value) || value.ocr === null || isOcrRegionEvidence(value.ocr)) &&
+    (!("columnIndex" in value) ||
+      value.columnIndex === null ||
+      (Number.isInteger(value.columnIndex) && Number(value.columnIndex) >= 0)) &&
     typeof value.includeInReading === "boolean"
+  );
+}
+
+function isDocumentPageLayout(value: unknown): value is DocumentPageLayout {
+  return isRecord(value) && Array.isArray(value.columns) && value.columns.every(isDocumentColumn);
+}
+
+function isDocumentColumn(value: unknown): value is DocumentColumn {
+  return (
+    isRecord(value) &&
+    Number.isInteger(value.index) &&
+    Number(value.index) >= 0 &&
+    isDocumentPixelRegion(value.bounds) &&
+    Array.isArray(value.regionIndices) &&
+    value.regionIndices.every((index) => Number.isInteger(index) && Number(index) >= 0)
   );
 }
 
