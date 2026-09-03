@@ -53,6 +53,13 @@ export type DocumentPageLayout = Readonly<{
   columns: readonly DocumentColumn[];
 }>;
 
+export type DocumentReadingOrderStrategy = "sourceOrder" | "columnMajor";
+
+export type DocumentReadingOrder = Readonly<{
+  strategy: DocumentReadingOrderStrategy;
+  regionIndices: readonly number[];
+}>;
+
 export type OcrRegionEvidence = Readonly<{
   blockKind: string | null;
   confidence: number | null;
@@ -76,6 +83,7 @@ export type ExtractedPage = Readonly<{
   provenance: unknown;
   sourceImageSize?: DocumentPixelSize | null;
   layout?: DocumentPageLayout | null;
+  readingOrder?: DocumentReadingOrder;
   regions?: readonly DocumentTextRegion[];
 }>;
 
@@ -119,6 +127,7 @@ function isExtractedPage(value: unknown): value is ExtractedPage {
       value.sourceImageSize === null ||
       isDocumentPixelSize(value.sourceImageSize)) &&
     (!("layout" in value) || value.layout === null || isDocumentPageLayout(value.layout)) &&
+    (!("readingOrder" in value) || isDocumentReadingOrder(value.readingOrder)) &&
     (!("regions" in value) || (Array.isArray(value.regions) && value.regions.every(isDocumentTextRegion)))
   );
 }
@@ -150,6 +159,15 @@ function isDocumentColumn(value: unknown): value is DocumentColumn {
     Number.isInteger(value.index) &&
     Number(value.index) >= 0 &&
     isDocumentPixelRegion(value.bounds) &&
+    Array.isArray(value.regionIndices) &&
+    value.regionIndices.every((index) => Number.isInteger(index) && Number(index) >= 0)
+  );
+}
+
+function isDocumentReadingOrder(value: unknown): value is DocumentReadingOrder {
+  return (
+    isRecord(value) &&
+    (value.strategy === "sourceOrder" || value.strategy === "columnMajor") &&
     Array.isArray(value.regionIndices) &&
     value.regionIndices.every((index) => Number.isInteger(index) && Number(index) >= 0)
   );

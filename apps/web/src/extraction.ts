@@ -53,6 +53,13 @@ export type DocumentPageLayout = Readonly<{
   columns: readonly DocumentColumn[];
 }>;
 
+export type DocumentReadingOrderStrategy = "sourceOrder" | "columnMajor";
+
+export type DocumentReadingOrder = Readonly<{
+  strategy: DocumentReadingOrderStrategy;
+  regionIndices: readonly number[];
+}>;
+
 export type OcrRegionEvidence = Readonly<{
   blockKind: string | null;
   confidence: number | null;
@@ -76,6 +83,7 @@ export type ExtractedPage = Readonly<{
   provenance: unknown;
   sourceImageSize?: DocumentPixelSize | null;
   layout?: DocumentPageLayout | null;
+  readingOrder?: DocumentReadingOrder;
   regions?: readonly DocumentTextRegion[];
 }>;
 
@@ -149,6 +157,7 @@ function isExtractedPage(value: unknown): value is ExtractedPage {
     "provenance" in page &&
     (!("sourceImageSize" in page) || page.sourceImageSize === null || isDocumentPixelSize(page.sourceImageSize)) &&
     (!("layout" in page) || page.layout === null || isDocumentPageLayout(page.layout)) &&
+    (!("readingOrder" in page) || isDocumentReadingOrder(page.readingOrder)) &&
     (!("regions" in page) || (Array.isArray(page.regions) && page.regions.every(isDocumentTextRegion)))
   );
 }
@@ -186,6 +195,16 @@ function isDocumentColumn(value: unknown): value is DocumentColumn {
     isDocumentPixelRegion(column.bounds) &&
     Array.isArray(column.regionIndices) &&
     column.regionIndices.every((index) => Number.isInteger(index) && Number(index) >= 0)
+  );
+}
+
+function isDocumentReadingOrder(value: unknown): value is DocumentReadingOrder {
+  if (typeof value !== "object" || value === null) return false;
+  const order = value as Record<string, unknown>;
+  return (
+    (order.strategy === "sourceOrder" || order.strategy === "columnMajor") &&
+    Array.isArray(order.regionIndices) &&
+    order.regionIndices.every((index) => Number.isInteger(index) && Number(index) >= 0)
   );
 }
 
