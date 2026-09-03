@@ -739,6 +739,7 @@ fn derive_reading_order(
 
     let assigned = body_columns
         .iter()
+        .copied()
         .chain(sidebar_columns.iter().copied())
         .flat_map(|column| column.region_indices.iter().copied())
         .collect::<BTreeSet<_>>();
