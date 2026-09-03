@@ -1,0 +1,54 @@
+name: Issue 20 narrow cleanup
+
+on:
+  push:
+    branches:
+      - feat/20-semantic-document-annotations
+    paths:
+      - .github/workflows/issue-20-narrow-cleanup.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/20-semantic-document-annotations
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore base formatting and keep only semantic module wiring
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show 4b65b9a74ef77d13800b055ee96e6d7092837597:crates/document-extraction/src/lib.rs > crates/document-extraction/src/lib.rs
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('crates/document-extraction/src/lib.rs')
+          text = path.read_text()
+          marker = 'use thiserror::Error;\n\npub const READING_DOCUMENT_VERSION: u8 = 1;'
+          replacement = '''use thiserror::Error;\n\nmod semantic;\npub use semantic::{document_role_concept, semantic_annotations};\n\npub const READING_DOCUMENT_VERSION: u8 = 1;'''
+          if text.count(marker) != 1:
+              raise SystemExit('expected one semantic module insertion point')
+          path.write_text(text.replace(marker, replacement))
+          PY
+          git diff --check
+
+      - name: Verify narrow integration
+        run: |
+          cargo test -p document-extraction
+          cargo check --workspace
+
+      - name: Commit narrow cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add crates/document-extraction/src/lib.rs
+          git commit -m 'Keep semantic document integration narrow'
+          git push origin HEAD:feat/20-semantic-document-annotations
