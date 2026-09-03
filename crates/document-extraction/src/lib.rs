@@ -349,11 +349,7 @@ fn classify_content_region(
         _ => return (DocumentTextRole::Content, None, Vec::new()),
     };
 
-    (
-        role,
-        Some(80),
-        vec![DocumentTextEvidence::OcrBlockHint],
-    )
+    (role, None, vec![DocumentTextEvidence::OcrBlockHint])
 }
 
 #[derive(Debug, Clone)]
