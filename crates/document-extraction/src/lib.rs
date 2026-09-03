@@ -61,7 +61,8 @@ pub struct DocumentTextRegion {
     pub source_line_index: u32,
     pub text: String,
     pub role: DocumentTextRole,
-    /// Confidence in the structural role. Unclassified reading content has no score.
+    /// Confidence in the product structural/semantic role. OCR confidence remains
+    /// separately available under `ocr`.
     pub confidence: Option<u8>,
     pub evidence: Vec<DocumentTextEvidence>,
     /// OCR-owned evidence retained independently from product structural roles.
@@ -74,6 +75,10 @@ pub struct DocumentTextRegion {
 pub enum DocumentTextRole {
     /// Reading content that has not yet been assigned a more specific semantic role.
     Content,
+    Heading,
+    Caption,
+    Table,
+    Form,
     Header,
     Footer,
     PageNumber,
@@ -87,6 +92,7 @@ pub enum DocumentTextEvidence {
     RepeatedAcrossPages,
     NumericOnly,
     SequentialPageNumber,
+    OcrBlockHint,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -290,7 +296,8 @@ fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
                     false,
                 )
             } else {
-                (DocumentTextRole::Content, None, Vec::new(), true)
+                let (role, confidence, evidence) = classify_content_region(region);
+                (role, confidence, evidence, true)
             };
 
             region.source_line_index = line_index as u32;
@@ -321,6 +328,28 @@ fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
         pages,
         diagnostics,
     }
+}
+
+fn classify_content_region(
+    region: &DocumentTextRegion,
+) -> (DocumentTextRole, Option<u8>, Vec<DocumentTextEvidence>) {
+    let Some(block_kind) = region
+        .ocr
+        .as_ref()
+        .and_then(|ocr| ocr.block_kind.as_deref())
+    else {
+        return (DocumentTextRole::Content, None, Vec::new());
+    };
+
+    let role = match block_kind {
+        "heading" => DocumentTextRole::Heading,
+        "caption" => DocumentTextRole::Caption,
+        "table" => DocumentTextRole::Table,
+        "form" => DocumentTextRole::Form,
+        _ => return (DocumentTextRole::Content, None, Vec::new()),
+    };
+
+    (role, None, vec![DocumentTextEvidence::OcrBlockHint])
 }
 
 #[derive(Debug, Clone)]

@@ -5,14 +5,23 @@ export type ReadingDocument = Readonly<{
   diagnostics: readonly CleanupDiagnostic[];
 }>;
 
-export type DocumentTextRole = "content" | "header" | "footer" | "pageNumber";
+export type DocumentTextRole =
+  | "content"
+  | "heading"
+  | "caption"
+  | "table"
+  | "form"
+  | "header"
+  | "footer"
+  | "pageNumber";
 
 export type DocumentTextEvidence =
   | "topMargin"
   | "bottomMargin"
   | "repeatedAcrossPages"
   | "numericOnly"
-  | "sequentialPageNumber";
+  | "sequentialPageNumber"
+  | "ocrBlockHint";
 
 export type DocumentPixelSize = Readonly<{
   width: number;
@@ -166,7 +175,16 @@ function isDocumentPixelRegion(value: unknown): value is DocumentPixelRegion {
 }
 
 function isDocumentTextRole(value: unknown): value is DocumentTextRole {
-  return value === "content" || value === "header" || value === "footer" || value === "pageNumber";
+  return (
+    value === "content" ||
+    value === "heading" ||
+    value === "caption" ||
+    value === "table" ||
+    value === "form" ||
+    value === "header" ||
+    value === "footer" ||
+    value === "pageNumber"
+  );
 }
 
 function isDocumentTextEvidence(value: unknown): value is DocumentTextEvidence {
@@ -175,7 +193,8 @@ function isDocumentTextEvidence(value: unknown): value is DocumentTextEvidence {
     value === "bottomMargin" ||
     value === "repeatedAcrossPages" ||
     value === "numericOnly" ||
-    value === "sequentialPageNumber"
+    value === "sequentialPageNumber" ||
+    value === "ocrBlockHint"
   );
 }
 
