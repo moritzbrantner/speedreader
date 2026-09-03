@@ -5,7 +5,7 @@ import { readerFixture } from "@moritzbrantner/speed-reading/fixture";
 import { createReadingDocument } from "@moritzbrantner/speed-reading/persistence";
 import { useDurableSpeedReader } from "@moritzbrantner/speed-reading/react";
 
-import { extractPdfDocument, type ExtractionResult } from "./extraction";
+import { extractPdfDocument, readingText, type ExtractionResult } from "./extraction";
 import {
   isDesktopShell,
   openDesktopDocument,
@@ -57,7 +57,7 @@ export function ReaderScreen() {
     if (result.ok) {
       reader.openDocument(createReadingDocument({
         title: file.name,
-        text: result.document.text,
+        text: readingText(result.document),
         source: "pdf",
         updatedAt: new Date().toISOString(),
       }));
@@ -71,7 +71,7 @@ export function ReaderScreen() {
     if (result.status === "opened") {
       reader.openDocument(createReadingDocument({
         title: result.fileName,
-        text: result.document.text,
+        text: readingText(result.document),
         source: result.fileName.toLowerCase().endsWith(".pdf") ? "pdf" : "plain-text",
         updatedAt: new Date().toISOString(),
       }));
