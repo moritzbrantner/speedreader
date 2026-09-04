@@ -1,0 +1,39 @@
+name: Refresh browser PDF locks
+
+on:
+  push:
+    branches: [feat/browser-pdf-wasm-work]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/browser-pdf-wasm-work
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Refresh JavaScript lock
+        run: bun install
+      - name: Refresh Rust lock and verify WASM target
+        run: cargo check --target wasm32-unknown-unknown -p document-extraction-wasm
+      - name: Verify web types
+        run: bun --filter @speedreader/web typecheck
+      - name: Commit refreshed locks
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add bun.lock Cargo.lock
+          if git diff --cached --quiet; then
+            echo "Locks already current."
+            exit 0
+          fi
+          git commit -m "Refresh browser PDF dependency locks"
+          git push origin HEAD:feat/browser-pdf-wasm-work
