@@ -32,4 +32,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add bun.lock
           git commit -m "chore: refresh lockfile for Next 16"
+          git fetch origin feat/github-pages-next16-app-router
+          git rebase origin/feat/github-pages-next16-app-router
           git push origin HEAD:feat/github-pages-next16-app-router
