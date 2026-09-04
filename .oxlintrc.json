@@ -5,6 +5,7 @@
     "perf": "warn"
   },
   "plugins": ["react", "typescript", "oxc"],
+  "ignorePatterns": ["apps/web/next-env.d.ts"],
   "rules": {
     "eslint/no-shadow": "off",
     "react/react-in-jsx-scope": "off",
