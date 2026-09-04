@@ -20,20 +20,117 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
+      - name: Make the extraction core browser-safe
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          cargo_path = Path("crates/document-extraction/Cargo.toml")
+          cargo = cargo_path.read_text()
+          dependency = 'moenarch-image-analysis-ocr = { git = "https://github.com/moritzbrantner/visual-analysis", rev = "e683c365ae4f736ea389258fe6a6683849dd3edc" }'
+          optional_dependency = 'moenarch-image-analysis-ocr = { git = "https://github.com/moritzbrantner/visual-analysis", rev = "e683c365ae4f736ea389258fe6a6683849dd3edc", optional = true }'
+          if dependency in cargo:
+              cargo = cargo.replace(dependency, optional_dependency, 1)
+          if "[features]" not in cargo:
+              cargo = cargo.replace(
+                  "\n[dev-dependencies]\n",
+                  '\n[features]\ndefault = ["structured-ocr"]\nstructured-ocr = ["dep:moenarch-image-analysis-ocr"]\n\n[dev-dependencies]\n',
+                  1,
+              )
+          cargo_path.write_text(cargo)
+
+          lib_path = Path("crates/document-extraction/src/lib.rs")
+          lib = lib_path.read_text()
+          old_import = "use image_analysis_ocr::{OcrBlockKind, OcrDocument, OcrPreset};"
+          new_import = '''#[cfg(feature = "structured-ocr")]
+          use image_analysis_ocr::{OcrBlockKind, OcrDocument};
+          #[cfg(feature = "structured-ocr")]
+          pub use image_analysis_ocr::OcrPreset;
+
+          #[cfg(not(feature = "structured-ocr"))]
+          #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+          pub enum OcrPreset {
+              #[default]
+              TrOcrBasePrintedOnnx,
+          }
+
+          #[cfg(not(feature = "structured-ocr"))]
+          impl OcrPreset {
+              pub fn as_str(self) -> &'static str {
+                  match self {
+                      Self::TrOcrBasePrintedOnnx => "trocr-base-printed-onnx",
+                  }
+              }
+          }'''
+          if old_import in lib:
+              lib = lib.replace(old_import, new_import, 1)
+          structured_variant = "    /// Canonical rich OCR output with optional layout, confidence, and block hints.\n    Structured(OcrDocument),"
+          if structured_variant in lib:
+              lib = lib.replace(
+                  structured_variant,
+                  '    /// Canonical rich OCR output with optional layout, confidence, and block hints.\n    #[cfg(feature = "structured-ocr")]\n    Structured(OcrDocument),',
+                  1,
+              )
+          structured_arm = "                CanonicalOcrResult::Structured(document) => {"
+          if structured_arm in lib:
+              lib = lib.replace(
+                  structured_arm,
+                  '                #[cfg(feature = "structured-ocr")]\n                CanonicalOcrResult::Structured(document) => {',
+                  1,
+              )
+          for signature in [
+              "fn regions_from_ocr(document: &OcrDocument, normalized_text: &str) -> Vec<DocumentTextRegion> {",
+              "fn ocr_block_kind_name(kind: &OcrBlockKind) -> String {",
+          ]:
+              if signature in lib and f'#[cfg(feature = "structured-ocr")]\n{signature}' not in lib:
+                  lib = lib.replace(signature, f'#[cfg(feature = "structured-ocr")]\n{signature}', 1)
+          lib_path.write_text(lib)
+
+          wasm_cargo_path = Path("crates/document-extraction-wasm/Cargo.toml")
+          wasm_cargo = wasm_cargo_path.read_text()
+          wasm_cargo = wasm_cargo.replace(
+              'document-extraction = { path = "../document-extraction" }',
+              'document-extraction = { path = "../document-extraction", default-features = false }',
+              1,
+          )
+          wasm_cargo = wasm_cargo.replace(
+              'moenarch-image-analysis-ocr = { git = "https://github.com/moritzbrantner/visual-analysis", rev = "e683c365ae4f736ea389258fe6a6683849dd3edc" }\n',
+              "",
+              1,
+          )
+          wasm_cargo_path.write_text(wasm_cargo)
+
+          wasm_lib_path = Path("crates/document-extraction-wasm/src/lib.rs")
+          wasm_lib = wasm_lib_path.read_text()
+          wasm_lib = wasm_lib.replace("use image_analysis_ocr::OcrPreset;\n", "", 1)
+          wasm_lib = wasm_lib.replace(
+              "        OcrPreset::TrOcrBasePrintedOnnx",
+              "        document_extraction::OcrPreset::TrOcrBasePrintedOnnx",
+              1,
+          )
+          wasm_lib_path.write_text(wasm_lib)
+          PY
       - name: Refresh JavaScript lock
         run: bun install
       - name: Refresh Rust lock and verify WASM target
         run: cargo check --target wasm32-unknown-unknown -p document-extraction-wasm
+      - name: Verify native extraction core
+        run: cargo test -p document-extraction
       - name: Verify web types
         run: bun --filter @speedreader/web typecheck
-      - name: Commit refreshed locks
+      - name: Commit browser-safe core and refreshed locks
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add bun.lock Cargo.lock
+          git add \
+            crates/document-extraction/Cargo.toml \
+            crates/document-extraction/src/lib.rs \
+            crates/document-extraction-wasm/Cargo.toml \
+            crates/document-extraction-wasm/src/lib.rs \
+            bun.lock Cargo.lock
           if git diff --cached --quiet; then
-            echo "Locks already current."
+            echo "Browser extraction core and locks already current."
             exit 0
           fi
-          git commit -m "Refresh browser PDF dependency locks"
+          git commit -m "Keep native OCR runtime out of browser WASM"
           git push origin HEAD:feat/browser-pdf-wasm-work
