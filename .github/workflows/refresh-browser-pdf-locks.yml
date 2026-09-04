@@ -80,6 +80,7 @@ jobs:
               )
           for signature in [
               "fn regions_from_ocr(document: &OcrDocument, normalized_text: &str) -> Vec<DocumentTextRegion> {",
+              "fn ocr_line_metadata(",
               "fn ocr_block_kind_name(kind: &OcrBlockKind) -> String {",
           ]:
               if signature in lib and f'#[cfg(feature = "structured-ocr")]\n{signature}' not in lib:
