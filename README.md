@@ -2,9 +2,11 @@
 
 Cross-platform speed-reading product for web, mobile, and desktop.
 
+**Web app:** https://moritzbrantner.github.io/speedreader/
+
 ## Architecture direction
 
-- **Web:** Next.js with a static-export-compatible product shell.
+- **Web:** Next.js 16 App Router with a static export deployed to GitHub Pages.
 - **Mobile:** Expo + Expo Router with native presentation.
 - **Desktop:** Tauri 2 embedding the web build and adding native capabilities.
 - **Shared reader:** platform-neutral TypeScript chunking, pacing, pivot/ORP, session, and React bindings.
