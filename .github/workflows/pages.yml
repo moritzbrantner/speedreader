@@ -24,10 +24,18 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.0
+      - name: Setup Rust/WASM target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Install wasm-bindgen CLI
+        run: cargo install wasm-bindgen-cli --version 0.2.127 --locked
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Install workspace dependencies
         run: bun install --frozen-lockfile
+      - name: Build browser PDF runtime
+        run: bun run wasm:build
       - name: Build static web app
         env:
           GITHUB_PAGES: "true"

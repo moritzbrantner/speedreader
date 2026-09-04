@@ -24,6 +24,7 @@ const readerPersistence = createPlatformReaderPersistence();
 
 export function ReaderScreen() {
   const [extraction, setExtraction] = useState<ExtractionResult | undefined>();
+  const [importingPdf, setImportingPdf] = useState(false);
   const [desktopAvailable, setDesktopAvailable] = useState(false);
   const [desktopProgress, setDesktopProgress] = useState<DesktopExtractionProgress | undefined>();
   const reader = useDurableSpeedReader({ initialDocument, persistence: readerPersistence });
@@ -52,7 +53,10 @@ export function ReaderScreen() {
 
   const importPdf = async (file: File | undefined) => {
     if (file === undefined) return;
+    setExtraction(undefined);
+    setImportingPdf(true);
     const result = await extractPdfDocument(file, process.env.NEXT_PUBLIC_EXTRACTION_URL);
+    setImportingPdf(false);
     setExtraction(result);
     if (result.ok) {
       reader.openDocument(createReadingDocument({
@@ -85,7 +89,7 @@ export function ReaderScreen() {
     <main style={{ display: "grid", gap: 24, margin: "auto", maxWidth: 960, minHeight: "100dvh", padding: 24 }}>
       <header>
         <h1>Speedreader</h1>
-        <p>Paste text to read locally, or import a PDF through a configured extraction service.</p>
+        <p>Paste text or import a PDF. Web PDF extraction runs locally in your browser, including OCR for scanned pages.</p>
       </header>
       {desktopAvailable ? (
         <button type="button" onClick={() => void openNativeDocument()}>
@@ -102,8 +106,9 @@ export function ReaderScreen() {
       </label>
       <label>
         Import PDF
-        <input type="file" accept="application/pdf" onChange={(event) => void importPdf(event.target.files?.[0])} />
+        <input type="file" accept="application/pdf" disabled={importingPdf} onChange={(event) => void importPdf(event.target.files?.[0])} />
       </label>
+      {importingPdf ? <p role="status">Extracting PDF locally… Scanned pages may load OCR models on first use.</p> : null}
       {desktopProgress !== undefined ? <p role="status">{desktopProgressMessage(desktopProgress)}</p> : null}
       {extraction !== undefined && !extraction.ok ? <p role="status">{extraction.message}</p> : null}
       {extraction?.ok ? <p role="status">Imported {extraction.document.pages.length} pages.</p> : null}

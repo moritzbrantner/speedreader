@@ -6,13 +6,21 @@ Cross-platform speed-reading product for web, mobile, and desktop.
 
 ## Architecture direction
 
-- **Web:** Next.js 16 App Router with a static export deployed to GitHub Pages.
+- **Web:** Next.js 16 App Router with a static export deployed to GitHub Pages. PDF import runs locally in a Web Worker: Rust/WASM handles PDF inspection and canonical document assembly, PDF.js renders scanned pages, and `ocrs` performs browser-side OCR.
 - **Mobile:** Expo + Expo Router with native presentation.
 - **Desktop:** Tauri 2 embedding the web build and adding native capabilities.
 - **Shared reader:** platform-neutral TypeScript chunking, pacing, pivot/ORP, session, and React bindings.
-- **Document extraction:** Rust orchestration for PDF text extraction and OCR, reusing the canonical OCR implementation from `visual-analysis` rather than duplicating it here.
+- **Document extraction:** platform-neutral Rust orchestration for PDF text extraction and OCR. Native adapters reuse the canonical OCR contracts from `visual-analysis`; the browser binding lives in `document-extraction-wasm` rather than adding browser concerns to the core crate.
 
 The application should keep its simplest mode permanently useful: plain text can be read locally without requiring OCR, a backend, accounts, or sync. More capable extraction and platform integrations are adapters around that core.
+
+## Browser PDF extraction
+
+The GitHub Pages build does not need an extraction server. PDFs with embedded text are inspected and cleaned entirely through the Rust/WASM extraction core. If a page has no embedded text, PDF.js renders only that page to an off-screen canvas and the worker runs `ocrs` against the pixels before handing the recognized text back to the canonical Rust document assembly path.
+
+PDF bytes and rendered page pixels stay in the browser. The OCR detection and recognition models are downloaded lazily from the upstream `ocrs` model host on first scanned-PDF use, verified against pinned SHA-256 digests, and are not vendored into this repository or the Pages bundle. The current browser OCR model is intended primarily for printed Latin-script text; embedded-text PDFs do not have that limitation.
+
+A configured `NEXT_PUBLIC_EXTRACTION_URL` remains an explicit HTTP extraction override. This keeps hosted/server deployments and the existing service contract available without making GitHub Pages depend on a backend.
 
 ## Roadmap
 
@@ -63,12 +71,19 @@ beginning.
 
 ## Local development
 
-Install JavaScript dependencies with `bun install`, then run `bun run ci` for the
-full verification gate. The GitHub Actions workflow has the same commands and
-can be exercised locally with `act -j verify`.
+Install JavaScript dependencies with `bun install`. Browser PDF builds also need
+the Rust `wasm32-unknown-unknown` target and the matching wasm-bindgen CLI:
 
-The platform-neutral reader lives in `packages/speed-reading`. Its React hook is
-a binding only; web and Expo provide their own UI while desktop is a Tauri shell
-around the static web export. Native packaging requires the corresponding host
-libraries. When those are unavailable locally, use `act -j verify` in addition
-to the focused TypeScript and platform tests.
+```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.127 --locked
+bun run ci
+```
+
+The GitHub Actions workflows install the same WASM toolchain before running the
+full verification gate and before producing the Pages artifact. The platform-neutral
+reader lives in `packages/speed-reading`. Its React hook is a binding only; web
+and Expo provide their own UI while desktop is a Tauri shell around the static
+web export. Native packaging requires the corresponding host libraries. When
+those are unavailable locally, use `act -j verify` in addition to the focused
+TypeScript and platform tests.

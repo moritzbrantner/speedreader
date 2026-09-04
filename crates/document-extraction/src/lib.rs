@@ -1,6 +1,25 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use image_analysis_ocr::{OcrBlockKind, OcrDocument, OcrPreset};
+#[cfg(feature = "structured-ocr")]
+use image_analysis_ocr::{OcrBlockKind, OcrDocument};
+#[cfg(feature = "structured-ocr")]
+pub use image_analysis_ocr::OcrPreset;
+
+#[cfg(not(feature = "structured-ocr"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OcrPreset {
+    #[default]
+    TrOcrBasePrintedOnnx,
+}
+
+#[cfg(not(feature = "structured-ocr"))]
+impl OcrPreset {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::TrOcrBasePrintedOnnx => "trocr-base-printed-onnx",
+        }
+    }
+}
 use lopdf::Document;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -177,6 +196,7 @@ pub enum CanonicalOcrResult {
     /// Text-only OCR output from adapters that do not provide structured evidence.
     Text(String),
     /// Canonical rich OCR output with optional layout, confidence, and block hints.
+    #[cfg(feature = "structured-ocr")]
     Structured(OcrDocument),
 }
 
@@ -251,6 +271,7 @@ pub fn extract_pages(
                     let regions = regions_from_ocr_text(&text);
                     (text, provenance, None, regions)
                 }
+                #[cfg(feature = "structured-ocr")]
                 CanonicalOcrResult::Structured(document) => {
                     let text = normalize_whitespace(&document.text);
                     let source_image_size = Some(DocumentPixelSize {
@@ -894,6 +915,7 @@ fn vertically_overlaps(left: DocumentPixelRegion, right: DocumentPixelRegion) ->
 }
 
 #[derive(Debug, Clone)]
+#[cfg(feature = "structured-ocr")]
 struct OcrLineMetadata {
     text: String,
     evidence: OcrRegionEvidence,
@@ -929,6 +951,7 @@ fn regions_from_ocr_text(text: &str) -> Vec<DocumentTextRegion> {
         .collect()
 }
 
+#[cfg(feature = "structured-ocr")]
 fn regions_from_ocr(document: &OcrDocument, normalized_text: &str) -> Vec<DocumentTextRegion> {
     let document_confidence = document.confidence.map(|confidence| confidence.value());
     let metadata = ocr_line_metadata(document, document_confidence);
@@ -967,6 +990,7 @@ fn regions_from_ocr(document: &OcrDocument, normalized_text: &str) -> Vec<Docume
         .collect()
 }
 
+#[cfg(feature = "structured-ocr")]
 fn ocr_line_metadata(
     document: &OcrDocument,
     document_confidence: Option<u8>,
@@ -1029,6 +1053,7 @@ fn ocr_line_metadata(
     metadata
 }
 
+#[cfg(feature = "structured-ocr")]
 fn push_ocr_metadata_lines(
     metadata: &mut Vec<OcrLineMetadata>,
     text: &str,
@@ -1042,6 +1067,7 @@ fn push_ocr_metadata_lines(
     }
 }
 
+#[cfg(feature = "structured-ocr")]
 fn ocr_block_kind_name(kind: &OcrBlockKind) -> String {
     match kind {
         OcrBlockKind::Paragraph => "paragraph".to_string(),
