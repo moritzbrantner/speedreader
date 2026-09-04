@@ -34,6 +34,9 @@ async function extract({ requestId, pdf, assetBase }) {
   const scannedPages = pages.filter((page) => page.embeddedText.trim() === "");
 
   if (scannedPages.length > 0) {
+    if (typeof OffscreenCanvas === "undefined") {
+      throw new Error("This browser does not support the off-screen canvas required for scanned PDF OCR.");
+    }
     const [pdfjs, ocr] = await Promise.all([
       loadPdfJs(assetBase),
       loadOcr(wasm, requestId),

@@ -8,6 +8,7 @@ crate-type = ["cdylib", "rlib"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 document-extraction = { path = "../document-extraction" }
+getrandom = { version = "0.3.4", features = ["wasm_js"] }
 js-sys = "0.3.90"
 moenarch-image-analysis-ocr = { git = "https://github.com/moritzbrantner/visual-analysis", rev = "e683c365ae4f736ea389258fe6a6683849dd3edc" }
 ocrs = { version = "0.13.0", default-features = false, features = ["rten"] }

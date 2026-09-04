@@ -18,9 +18,6 @@ export async function extractPdfInBrowser(
   if (typeof Worker === "undefined" || typeof document === "undefined") {
     throw new Error("Local browser PDF extraction is unavailable in this environment.");
   }
-  if (typeof OffscreenCanvas === "undefined") {
-    throw new Error("This browser does not support the off-screen canvas required for local PDF extraction.");
-  }
 
   const requestId = 1;
   const assetBase = new URL("./", document.baseURI).href;
