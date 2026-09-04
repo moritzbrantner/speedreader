@@ -6,7 +6,6 @@ use document_extraction::{
     extract_pages, inspect_pdf, CanonicalOcr, CanonicalOcrResult, ExtractionError,
     ExtractionProvenance, PageInput, ReadingDocument,
 };
-use image_analysis_ocr::OcrPreset;
 use ocrs::{ImageSource, OcrEngine, OcrEngineParams};
 use rten::Model;
 use serde::{Deserialize, Serialize};
@@ -46,10 +45,10 @@ impl CanonicalOcr for PrecomputedOcr {
             })
     }
 
-    fn preset(&self) -> OcrPreset {
+    fn preset(&self) -> document_extraction::OcrPreset {
         // The core contract currently requires a canonical preset. The browser
         // adapter rewrites this provenance to the concrete OCR engine below.
-        OcrPreset::TrOcrBasePrintedOnnx
+        document_extraction::OcrPreset::TrOcrBasePrintedOnnx
     }
 }
 
