@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use axum::{body::Bytes, extract::State, http::StatusCode, routing::post, Json, Router};
 use document_extraction::{
-    extract_pages, extract_pdf as extract_pdf_document, CanonicalOcr, ExtractionError, PageInput,
-    ReadingDocument,
+    extract_pages, extract_pdf as extract_pdf_document, CanonicalOcr, CanonicalOcrResult,
+    ExtractionError, PageInput, ReadingDocument,
 };
 use image_analysis_ocr::OcrPreset;
 use serde::Deserialize;
@@ -78,10 +78,11 @@ impl RequestOcr {
 }
 
 impl CanonicalOcr for RequestOcr {
-    fn recognize_page(&self, page_number: u32) -> Result<String, ExtractionError> {
+    fn recognize_page(&self, page_number: u32) -> Result<CanonicalOcrResult, ExtractionError> {
         self.0
             .get(&page_number)
             .cloned()
+            .map(CanonicalOcrResult::Text)
             .ok_or_else(|| ExtractionError::Ocr {
                 page_number,
                 message: "no canonical OCR result was supplied by the configured adapter".into(),
@@ -96,7 +97,7 @@ impl CanonicalOcr for RequestOcr {
 struct UnavailablePdfOcr;
 
 impl CanonicalOcr for UnavailablePdfOcr {
-    fn recognize_page(&self, page_number: u32) -> Result<String, ExtractionError> {
+    fn recognize_page(&self, page_number: u32) -> Result<CanonicalOcrResult, ExtractionError> {
         Err(ExtractionError::Ocr {
             page_number,
             message: "PDF OCR requires a configured page-rendering adapter".into(),
@@ -137,5 +138,7 @@ mod tests {
         assert_eq!(document.version, 1);
         assert_eq!(document.text, "native text\n\nscanned text");
         assert_eq!(document.pages.len(), 2);
+        assert!(document.pages[1].regions[0].ocr.is_some());
+        assert_eq!(document.pages[1].source_image_size, None);
     }
 }

@@ -417,6 +417,7 @@ version = "0.0.0"
 dependencies = [
  "lopdf",
  "moenarch-image-analysis-ocr",
+ "moenarch-semantic-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -1231,6 +1232,15 @@ checksum = "0703aa686314074f579d41cf4c4fbca081dd4e44537a0eea7c4c4acfe661b60f"
 dependencies = [
  "serde",
  "thiserror",
+]
+
+[[package]]
+name = "moenarch-semantic-core"
+version = "0.1.0"
+source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=b7533cd02269124deece75b76477ca55a853cd77#b7533cd02269124deece75b76477ca55a853cd77"
+dependencies = [
+ "serde",
+ "sha2",
 ]
 
 [[package]]

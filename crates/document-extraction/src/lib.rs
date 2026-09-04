@@ -1,9 +1,12 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
-use image_analysis_ocr::OcrPreset;
+use image_analysis_ocr::{OcrBlockKind, OcrDocument, OcrPreset};
 use lopdf::Document;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+
+mod semantic;
+pub use semantic::{document_role_concept, semantic_annotations};
 
 pub const READING_DOCUMENT_VERSION: u8 = 1;
 
@@ -22,6 +25,123 @@ pub struct ExtractedPage {
     pub page_number: u32,
     pub text: String,
     pub provenance: ExtractionProvenance,
+    /// Pixel dimensions of the rendered source image when structured OCR provides them.
+    pub source_image_size: Option<DocumentPixelSize>,
+    /// Conservative page-layout structure derived from OCR geometry.
+    pub layout: Option<DocumentPageLayout>,
+    /// Candidate reading order. The current reading projection still uses `text` unchanged.
+    pub reading_order: DocumentReadingOrder,
+    /// Source lines retained with their structural classification, including lines
+    /// excluded from the speed-reading projection.
+    pub regions: Vec<DocumentTextRegion>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentPixelSize {
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentPixelRegion {
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentPageLayout {
+    pub columns: Vec<DocumentColumn>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentColumn {
+    /// Zero-based left-to-right column index within this page layout.
+    pub index: u32,
+    /// Union of the OCR regions assigned to this column.
+    pub bounds: DocumentPixelRegion,
+    /// Indices into `ExtractedPage::regions`, in source-line order.
+    pub region_indices: Vec<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentReadingOrder {
+    pub strategy: DocumentReadingOrderStrategy,
+    /// Indices into `ExtractedPage::regions` in the proposed reading sequence.
+    pub region_indices: Vec<u32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DocumentReadingOrderStrategy {
+    SourceOrder,
+    ColumnMajor,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OcrRegionEvidence {
+    /// Canonical OCR block hint. This is source evidence, not a semantic decision.
+    pub block_kind: Option<String>,
+    pub confidence: Option<u8>,
+    pub region: Option<DocumentPixelRegion>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentTextRegion {
+    /// Zero-based line index in the normalized source page before filtering.
+    pub source_line_index: u32,
+    pub text: String,
+    pub role: DocumentTextRole,
+    /// Confidence in the product structural/semantic role. OCR confidence remains
+    /// separately available under `ocr`.
+    pub confidence: Option<u8>,
+    pub evidence: Vec<DocumentTextEvidence>,
+    /// OCR-owned evidence retained independently from product structural roles.
+    pub ocr: Option<OcrRegionEvidence>,
+    /// Zero-based membership in `ExtractedPage::layout.columns`, when detected.
+    pub column_index: Option<u32>,
+    pub include_in_reading: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DocumentTextRole {
+    /// Reading content that has not yet been assigned a more specific semantic role.
+    Content,
+    Heading,
+    Caption,
+    Table,
+    Form,
+    Footnote,
+    Sidebar,
+    Header,
+    Footer,
+    PageNumber,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DocumentTextEvidence {
+    TopMargin,
+    BottomMargin,
+    RepeatedAcrossPages,
+    NumericOnly,
+    SequentialPageNumber,
+    OcrBlockHint,
+    BottomPageBand,
+    FootnoteMarker,
+    NarrowLayoutColumn,
+    PageEdge,
+    ParallelBodyColumn,
+    SecondaryColumnSupport,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -52,8 +172,16 @@ pub struct PageInput {
     pub embedded_text: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CanonicalOcrResult {
+    /// Text-only OCR output from adapters that do not provide structured evidence.
+    Text(String),
+    /// Canonical rich OCR output with optional layout, confidence, and block hints.
+    Structured(OcrDocument),
+}
+
 pub trait CanonicalOcr {
-    fn recognize_page(&self, page_number: u32) -> Result<String, ExtractionError>;
+    fn recognize_page(&self, page_number: u32) -> Result<CanonicalOcrResult, ExtractionError>;
     fn preset(&self) -> OcrPreset;
 }
 
@@ -93,10 +221,16 @@ pub fn extract_pdf(
 
 /// Create the shared reading-document contract from a plain-text source.
 pub fn extract_text(text: &str) -> ReadingDocument {
+    let text = normalize_whitespace(text);
+    let regions = regions_from_text(&text);
     cleanup(vec![ExtractedPage {
         page_number: 1,
-        text: normalize_whitespace(text),
+        text,
         provenance: ExtractionProvenance::EmbeddedText,
+        source_image_size: None,
+        layout: None,
+        reading_order: empty_reading_order(),
+        regions,
     }])
 }
 
@@ -107,54 +241,146 @@ pub fn extract_pages(
     let mut extracted = Vec::new();
     for page in pages {
         let normalized = normalize_whitespace(&page.embedded_text);
-        let (text, provenance) = if normalized.is_empty() {
-            let recognized = normalize_whitespace(&ocr.recognize_page(page.page_number)?);
-            (
-                recognized,
-                ExtractionProvenance::CanonicalOcr {
-                    preset: ocr.preset().as_str().to_string(),
-                },
-            )
+        let (text, provenance, source_image_size, regions) = if normalized.is_empty() {
+            let provenance = ExtractionProvenance::CanonicalOcr {
+                preset: ocr.preset().as_str().to_string(),
+            };
+            match ocr.recognize_page(page.page_number)? {
+                CanonicalOcrResult::Text(text) => {
+                    let text = normalize_whitespace(&text);
+                    let regions = regions_from_ocr_text(&text);
+                    (text, provenance, None, regions)
+                }
+                CanonicalOcrResult::Structured(document) => {
+                    let text = normalize_whitespace(&document.text);
+                    let source_image_size = Some(DocumentPixelSize {
+                        width: document.width,
+                        height: document.height,
+                    });
+                    let regions = regions_from_ocr(&document, &text);
+                    (text, provenance, source_image_size, regions)
+                }
+            }
         } else {
-            (normalized, ExtractionProvenance::EmbeddedText)
+            let regions = regions_from_text(&normalized);
+            (
+                normalized,
+                ExtractionProvenance::EmbeddedText,
+                None,
+                regions,
+            )
         };
         extracted.push(ExtractedPage {
             page_number: page.page_number,
             text,
             provenance,
+            source_image_size,
+            layout: None,
+            reading_order: empty_reading_order(),
+            regions,
         });
     }
     Ok(cleanup(extracted))
 }
 
-fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
-    let margins = recurring_margin_lines(&pages);
-    let mut diagnostics = Vec::new();
-    for (line, page_numbers) in &margins {
-        diagnostics.push(CleanupDiagnostic {
-            kind: CleanupDiagnosticKind::RepeatedMarginArtifact,
-            text: line.clone(),
-            pages: page_numbers.clone(),
-        });
+fn empty_reading_order() -> DocumentReadingOrder {
+    DocumentReadingOrder {
+        strategy: DocumentReadingOrderStrategy::SourceOrder,
+        region_indices: Vec::new(),
     }
+}
+
+fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
+    let page_numbers = sequential_page_number_lines(&pages);
+    let headers = recurring_margin_lines(&pages, MarginPosition::Top, &page_numbers);
+    let footers = recurring_margin_lines(&pages, MarginPosition::Bottom, &page_numbers);
+    let mut diagnostics = repeated_margin_diagnostics(&headers, &footers);
 
     for page in &mut pages {
-        let mut retained = Vec::new();
-        for line in page.text.lines() {
-            if margins.contains_key(line) {
-                continue;
-            }
-            if is_page_number(line) {
+        let lines = page
+            .text
+            .lines()
+            .map(str::to_string)
+            .collect::<Vec<String>>();
+        let source_image_size = page.source_image_size;
+        let mut regions = std::mem::take(&mut page.regions);
+        if !regions_match_lines(&regions, &lines) {
+            regions = regions_from_text(&page.text);
+        }
+
+        for (line_index, (line, region)) in lines.iter().zip(regions.iter_mut()).enumerate() {
+            let page_number_line = page_numbers
+                .get(&page.page_number)
+                .is_some_and(|indices| indices.contains(&line_index));
+            let header = headers
+                .get(line)
+                .is_some_and(|occurrences| occurrences.contains(&(page.page_number, line_index)));
+            let footer = footers
+                .get(line)
+                .is_some_and(|occurrences| occurrences.contains(&(page.page_number, line_index)));
+
+            let (role, confidence, evidence, include_in_reading) = if page_number_line {
+                let position = margin_position_evidence(line_index, lines.len());
                 diagnostics.push(CleanupDiagnostic {
                     kind: CleanupDiagnosticKind::PageNumberArtifact,
-                    text: line.to_string(),
+                    text: line.clone(),
                     pages: vec![page.page_number],
                 });
-                continue;
-            }
-            retained.push(line);
+                (
+                    DocumentTextRole::PageNumber,
+                    Some(100),
+                    vec![
+                        position,
+                        DocumentTextEvidence::NumericOnly,
+                        DocumentTextEvidence::SequentialPageNumber,
+                    ],
+                    false,
+                )
+            } else if header {
+                (
+                    DocumentTextRole::Header,
+                    Some(90),
+                    vec![
+                        DocumentTextEvidence::TopMargin,
+                        DocumentTextEvidence::RepeatedAcrossPages,
+                    ],
+                    false,
+                )
+            } else if footer {
+                (
+                    DocumentTextRole::Footer,
+                    Some(90),
+                    vec![
+                        DocumentTextEvidence::BottomMargin,
+                        DocumentTextEvidence::RepeatedAcrossPages,
+                    ],
+                    false,
+                )
+            } else {
+                let (role, confidence, evidence) =
+                    classify_content_region(region, source_image_size);
+                (role, confidence, evidence, true)
+            };
+
+            region.source_line_index = line_index as u32;
+            region.text = line.clone();
+            region.role = role;
+            region.confidence = confidence;
+            region.evidence = evidence;
+            region.column_index = None;
+            region.include_in_reading = include_in_reading;
         }
-        page.text = retained.join("\n");
+
+        page.layout = detect_page_layout(source_image_size, &mut regions);
+        classify_sidebar_columns(source_image_size, page.layout.as_ref(), &mut regions);
+        page.reading_order = derive_reading_order(page.layout.as_ref(), &regions);
+        page.text = regions
+            .iter()
+            .filter(|region| region.include_in_reading)
+            .map(|region| region.text.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        page.regions = regions;
     }
 
     ReadingDocument {
@@ -170,22 +396,783 @@ fn cleanup(mut pages: Vec<ExtractedPage>) -> ReadingDocument {
     }
 }
 
-fn recurring_margin_lines(pages: &[ExtractedPage]) -> BTreeMap<String, Vec<u32>> {
-    let mut occurrences: BTreeMap<String, Vec<u32>> = BTreeMap::new();
-    for page in pages {
-        let lines: Vec<_> = page.text.lines().collect();
-        for line in lines.first().into_iter().chain(lines.last()) {
-            let trimmed = line.trim();
-            if !trimmed.is_empty() && !is_page_number(trimmed) {
-                let page_numbers = occurrences.entry(trimmed.to_string()).or_default();
-                if !page_numbers.contains(&page.page_number) {
-                    page_numbers.push(page.page_number);
-                }
+fn classify_content_region(
+    region: &DocumentTextRegion,
+    source_image_size: Option<DocumentPixelSize>,
+) -> (DocumentTextRole, Option<u8>, Vec<DocumentTextEvidence>) {
+    if let Some(block_kind) = region
+        .ocr
+        .as_ref()
+        .and_then(|ocr| ocr.block_kind.as_deref())
+    {
+        let role = match block_kind {
+            "heading" => Some(DocumentTextRole::Heading),
+            "caption" => Some(DocumentTextRole::Caption),
+            "table" => Some(DocumentTextRole::Table),
+            "form" => Some(DocumentTextRole::Form),
+            _ => None,
+        };
+        if let Some(role) = role {
+            return (role, None, vec![DocumentTextEvidence::OcrBlockHint]);
+        }
+    }
+
+    if is_bottom_page_band(region, source_image_size) && has_footnote_marker(&region.text) {
+        return (
+            DocumentTextRole::Footnote,
+            None,
+            vec![
+                DocumentTextEvidence::BottomPageBand,
+                DocumentTextEvidence::FootnoteMarker,
+            ],
+        );
+    }
+
+    (DocumentTextRole::Content, None, Vec::new())
+}
+
+fn is_bottom_page_band(
+    region: &DocumentTextRegion,
+    source_image_size: Option<DocumentPixelSize>,
+) -> bool {
+    let Some(page_size) = source_image_size else {
+        return false;
+    };
+    let Some(bounds) = region.ocr.as_ref().and_then(|ocr| ocr.region) else {
+        return false;
+    };
+    if page_size.height == 0 {
+        return false;
+    }
+
+    let bottom = u64::from(bounds.y) + u64::from(bounds.height);
+    bottom.saturating_mul(4) >= u64::from(page_size.height).saturating_mul(3)
+}
+
+fn has_footnote_marker(text: &str) -> bool {
+    let text = text.trim_start();
+    if text.is_empty() {
+        return false;
+    }
+
+    for marker in ["*", "†", "‡"] {
+        if let Some(body) = text.strip_prefix(marker) {
+            return body.chars().any(char::is_alphabetic);
+        }
+    }
+
+    if let Some(rest) = text.strip_prefix('[') {
+        if let Some(closing) = rest.find(']') {
+            let marker = &rest[..closing];
+            let body = &rest[closing + 1..];
+            if !marker.is_empty()
+                && marker.bytes().all(|byte| byte.is_ascii_digit())
+                && body.chars().any(char::is_alphabetic)
+            {
+                return true;
             }
         }
     }
-    occurrences.retain(|_, page_numbers| page_numbers.len() > 1);
+
+    let digit_count = text
+        .bytes()
+        .take_while(|byte| byte.is_ascii_digit())
+        .count();
+    if digit_count == 0 || digit_count == text.len() {
+        return false;
+    }
+    let rest = &text[digit_count..];
+    let Some(separator) = rest.as_bytes().first().copied() else {
+        return false;
+    };
+    if !matches!(separator, b'.' | b')' | b':') {
+        return false;
+    }
+
+    rest[1..].chars().any(char::is_alphabetic)
+}
+
+type LayoutCandidate = (usize, DocumentPixelRegion, u64);
+
+fn detect_page_layout(
+    source_image_size: Option<DocumentPixelSize>,
+    regions: &mut [DocumentTextRegion],
+) -> Option<DocumentPageLayout> {
+    for region in regions.iter_mut() {
+        region.column_index = None;
+    }
+
+    let page_size = source_image_size?;
+    if page_size.width == 0 || page_size.height == 0 {
+        return None;
+    }
+
+    let mut candidates = regions
+        .iter()
+        .enumerate()
+        .filter_map(|(region_index, region)| {
+            if region.role != DocumentTextRole::Content {
+                return None;
+            }
+            let bounds = region.ocr.as_ref()?.region?;
+            if bounds.width == 0 || bounds.height == 0 {
+                return None;
+            }
+            let center_x = u64::from(bounds.x) + u64::from(bounds.width) / 2;
+            Some((region_index, bounds, center_x))
+        })
+        .collect::<Vec<_>>();
+
+    if candidates.len() < 2 {
+        return None;
+    }
+    candidates.sort_by_key(|candidate| candidate.2);
+
+    // Centers separated by more than 20% of the page width start a new horizontal cluster.
+    // This avoids broad/spanning lines acting as bridges between otherwise distinct columns.
+    let split_gap = (u64::from(page_size.width) / 5).max(1);
+    let mut clusters: Vec<Vec<LayoutCandidate>> = Vec::new();
+    for candidate in candidates {
+        if let Some(cluster) = clusters.last_mut() {
+            let previous_center = cluster
+                .last()
+                .map(|candidate| candidate.2)
+                .unwrap_or(candidate.2);
+            if candidate.2.saturating_sub(previous_center) <= split_gap {
+                cluster.push(candidate);
+                continue;
+            }
+        }
+        clusters.push(vec![candidate]);
+    }
+
+    // One-off marginal blocks are deliberately not treated as columns. A column needs
+    // repeated geometric support before it can participate in later sidebar reasoning.
+    clusters.retain(|cluster| cluster.len() >= 2);
+    if clusters.is_empty() {
+        return None;
+    }
+
+    if clusters.len() > 1 {
+        let bounds = clusters
+            .iter()
+            .map(|cluster| layout_cluster_bounds(cluster))
+            .collect::<Vec<_>>();
+        let mut overlaps_another = vec![false; clusters.len()];
+        for left in 0..clusters.len() {
+            for right in left + 1..clusters.len() {
+                if vertically_overlaps(bounds[left], bounds[right]) {
+                    overlaps_another[left] = true;
+                    overlaps_another[right] = true;
+                }
+            }
+        }
+
+        let overlapping_count = overlaps_another.iter().filter(|overlaps| **overlaps).count();
+        if overlapping_count >= 2 {
+            clusters = clusters
+                .into_iter()
+                .zip(overlaps_another)
+                .filter_map(|(cluster, overlaps)| overlaps.then_some(cluster))
+                .collect();
+        } else {
+            // Horizontally separated blocks that occur in different vertical sections are
+            // indentation/layout changes, not simultaneous columns. Keep only the most
+            // strongly supported cluster as the single-column page structure.
+            let strongest = clusters
+                .into_iter()
+                .max_by(|left, right| {
+                    left.len().cmp(&right.len()).then_with(|| {
+                        layout_cluster_bounds(right)
+                            .x
+                            .cmp(&layout_cluster_bounds(left).x)
+                    })
+                })?;
+            clusters = vec![strongest];
+        }
+    }
+
+    clusters.sort_by_key(|cluster| layout_cluster_bounds(cluster).x);
+    let mut columns = Vec::with_capacity(clusters.len());
+    for (column_index, cluster) in clusters.into_iter().enumerate() {
+        let index = column_index as u32;
+        let bounds = layout_cluster_bounds(&cluster);
+        let mut region_indices = cluster
+            .iter()
+            .map(|candidate| candidate.0 as u32)
+            .collect::<Vec<_>>();
+        region_indices.sort_unstable();
+        for region_index in &region_indices {
+            regions[*region_index as usize].column_index = Some(index);
+        }
+        columns.push(DocumentColumn {
+            index,
+            bounds,
+            region_indices,
+        });
+    }
+
+    Some(DocumentPageLayout { columns })
+}
+
+fn classify_sidebar_columns(
+    source_image_size: Option<DocumentPixelSize>,
+    layout: Option<&DocumentPageLayout>,
+    regions: &mut [DocumentTextRegion],
+) {
+    let (Some(page_size), Some(layout)) = (source_image_size, layout) else {
+        return;
+    };
+    if page_size.width == 0 || layout.columns.len() < 2 {
+        return;
+    }
+
+    let widest = layout
+        .columns
+        .iter()
+        .map(|column| column.bounds.width)
+        .max()
+        .unwrap_or(0);
+    if widest == 0 {
+        return;
+    }
+
+    let sidebar_indices = layout
+        .columns
+        .iter()
+        .filter(|column| is_narrow_sidebar_candidate(column, page_size, widest, &layout.columns))
+        .map(|column| column.region_indices.clone())
+        .collect::<Vec<_>>();
+
+    for region_indices in sidebar_indices {
+        for region_index in region_indices {
+            let Some(region) = regions.get_mut(region_index as usize) else {
+                continue;
+            };
+            if region.role != DocumentTextRole::Content {
+                continue;
+            }
+            region.role = DocumentTextRole::Sidebar;
+            region.confidence = None;
+            region.evidence = vec![
+                DocumentTextEvidence::NarrowLayoutColumn,
+                DocumentTextEvidence::PageEdge,
+                DocumentTextEvidence::ParallelBodyColumn,
+                DocumentTextEvidence::SecondaryColumnSupport,
+            ];
+        }
+    }
+}
+
+fn is_narrow_sidebar_candidate(
+    candidate: &DocumentColumn,
+    page_size: DocumentPixelSize,
+    widest: u32,
+    columns: &[DocumentColumn],
+) -> bool {
+    let bounds = candidate.bounds;
+    let narrow_for_page = u64::from(bounds.width).saturating_mul(100)
+        <= u64::from(page_size.width).saturating_mul(25);
+    let narrow_relative_to_body = u64::from(bounds.width).saturating_mul(100)
+        <= u64::from(widest).saturating_mul(55);
+    if !narrow_for_page || !narrow_relative_to_body || !is_at_page_edge(bounds, page_size.width) {
+        return false;
+    }
+
+    columns.iter().any(|body| {
+        if body.index == candidate.index || body.bounds.width <= candidate.bounds.width {
+            return false;
+        }
+        let body_is_substantial = u64::from(body.bounds.width).saturating_mul(100)
+            >= u64::from(page_size.width).saturating_mul(30);
+        let secondary_support = candidate.region_indices.len().saturating_mul(2)
+            <= body.region_indices.len();
+        body_is_substantial
+            && secondary_support
+            && vertically_overlaps(candidate.bounds, body.bounds)
+    })
+}
+
+fn is_at_page_edge(bounds: DocumentPixelRegion, page_width: u32) -> bool {
+    let left_edge = u64::from(bounds.x).saturating_mul(100)
+        <= u64::from(page_width).saturating_mul(10);
+    let right = u64::from(bounds.x) + u64::from(bounds.width);
+    let right_edge = right.saturating_mul(100)
+        >= u64::from(page_width).saturating_mul(90);
+    left_edge || right_edge
+}
+
+fn derive_reading_order(
+    layout: Option<&DocumentPageLayout>,
+    regions: &[DocumentTextRegion],
+) -> DocumentReadingOrder {
+    let source = source_reading_order(regions);
+    let Some(layout) = layout else {
+        return source;
+    };
+
+    let mut body_columns = layout
+        .columns
+        .iter()
+        .filter(|column| column_has_role(column, regions, DocumentTextRole::Content))
+        .filter(|column| !column_has_role(column, regions, DocumentTextRole::Sidebar))
+        .collect::<Vec<_>>();
+    if body_columns.len() < 2 {
+        return source;
+    }
+    body_columns.sort_by_key(|column| column.index);
+
+    let mut sidebar_columns = layout
+        .columns
+        .iter()
+        .filter(|column| column_has_role(column, regions, DocumentTextRole::Sidebar))
+        .collect::<Vec<_>>();
+    sidebar_columns.sort_by_key(|column| column.index);
+
+    let body_top = body_columns
+        .iter()
+        .map(|column| column.bounds.y)
+        .min()
+        .unwrap_or(0);
+    let body_bottom = body_columns
+        .iter()
+        .map(|column| column.bounds.y.saturating_add(column.bounds.height))
+        .max()
+        .unwrap_or(0);
+
+    let assigned = body_columns
+        .iter()
+        .copied()
+        .chain(sidebar_columns.iter().copied())
+        .flat_map(|column| column.region_indices.iter().copied())
+        .collect::<BTreeSet<_>>();
+    let mut prefix = Vec::new();
+    let mut suffix = Vec::new();
+
+    for region_index in &source.region_indices {
+        if assigned.contains(region_index) {
+            continue;
+        }
+        let Some(region) = regions.get(*region_index as usize) else {
+            return source;
+        };
+        let Some(bounds) = region.ocr.as_ref().and_then(|ocr| ocr.region) else {
+            return source;
+        };
+        match region.role {
+            DocumentTextRole::Heading
+                if bounds.y.saturating_add(bounds.height) <= body_top =>
+            {
+                prefix.push(*region_index);
+            }
+            DocumentTextRole::Footnote if bounds.y >= body_bottom => {
+                suffix.push(*region_index);
+            }
+            _ => return source,
+        }
+    }
+
+    sort_region_indices_by_geometry(&mut prefix, regions);
+    sort_region_indices_by_geometry(&mut suffix, regions);
+
+    let mut ordered = prefix;
+    for column in body_columns {
+        let mut indices = column
+            .region_indices
+            .iter()
+            .copied()
+            .filter(|index| {
+                regions
+                    .get(*index as usize)
+                    .is_some_and(|region| {
+                        region.include_in_reading && region.role == DocumentTextRole::Content
+                    })
+            })
+            .collect::<Vec<_>>();
+        sort_region_indices_by_geometry(&mut indices, regions);
+        ordered.extend(indices);
+    }
+    for column in sidebar_columns {
+        let mut indices = column
+            .region_indices
+            .iter()
+            .copied()
+            .filter(|index| {
+                regions
+                    .get(*index as usize)
+                    .is_some_and(|region| {
+                        region.include_in_reading && region.role == DocumentTextRole::Sidebar
+                    })
+            })
+            .collect::<Vec<_>>();
+        sort_region_indices_by_geometry(&mut indices, regions);
+        ordered.extend(indices);
+    }
+    ordered.extend(suffix);
+
+    let unique = ordered.iter().copied().collect::<BTreeSet<_>>();
+    if ordered.len() != source.region_indices.len() || unique.len() != ordered.len() {
+        return source;
+    }
+
+    DocumentReadingOrder {
+        strategy: DocumentReadingOrderStrategy::ColumnMajor,
+        region_indices: ordered,
+    }
+}
+
+fn source_reading_order(regions: &[DocumentTextRegion]) -> DocumentReadingOrder {
+    DocumentReadingOrder {
+        strategy: DocumentReadingOrderStrategy::SourceOrder,
+        region_indices: regions
+            .iter()
+            .enumerate()
+            .filter_map(|(index, region)| region.include_in_reading.then_some(index as u32))
+            .collect(),
+    }
+}
+
+fn column_has_role(
+    column: &DocumentColumn,
+    regions: &[DocumentTextRegion],
+    role: DocumentTextRole,
+) -> bool {
+    column.region_indices.iter().any(|index| {
+        regions
+            .get(*index as usize)
+            .is_some_and(|region| region.role == role)
+    })
+}
+
+fn sort_region_indices_by_geometry(indices: &mut [u32], regions: &[DocumentTextRegion]) {
+    indices.sort_by_key(|index| {
+        let bounds = regions
+            .get(*index as usize)
+            .and_then(|region| region.ocr.as_ref())
+            .and_then(|ocr| ocr.region);
+        match bounds {
+            Some(bounds) => (bounds.y, bounds.x, *index),
+            None => (u32::MAX, u32::MAX, *index),
+        }
+    });
+}
+
+fn layout_cluster_bounds(cluster: &[LayoutCandidate]) -> DocumentPixelRegion {
+    let left = cluster
+        .iter()
+        .map(|candidate| candidate.1.x)
+        .min()
+        .unwrap_or(0);
+    let top = cluster
+        .iter()
+        .map(|candidate| candidate.1.y)
+        .min()
+        .unwrap_or(0);
+    let right = cluster
+        .iter()
+        .map(|candidate| candidate.1.x.saturating_add(candidate.1.width))
+        .max()
+        .unwrap_or(left);
+    let bottom = cluster
+        .iter()
+        .map(|candidate| candidate.1.y.saturating_add(candidate.1.height))
+        .max()
+        .unwrap_or(top);
+
+    DocumentPixelRegion {
+        x: left,
+        y: top,
+        width: right.saturating_sub(left),
+        height: bottom.saturating_sub(top),
+    }
+}
+
+fn vertically_overlaps(left: DocumentPixelRegion, right: DocumentPixelRegion) -> bool {
+    let left_bottom = left.y.saturating_add(left.height);
+    let right_bottom = right.y.saturating_add(right.height);
+    left.y < right_bottom && right.y < left_bottom
+}
+
+#[derive(Debug, Clone)]
+struct OcrLineMetadata {
+    text: String,
+    evidence: OcrRegionEvidence,
+}
+
+fn regions_from_text(text: &str) -> Vec<DocumentTextRegion> {
+    text.lines()
+        .enumerate()
+        .map(|(line_index, line)| DocumentTextRegion {
+            source_line_index: line_index as u32,
+            text: line.to_string(),
+            role: DocumentTextRole::Content,
+            confidence: None,
+            evidence: Vec::new(),
+            ocr: None,
+            column_index: None,
+            include_in_reading: true,
+        })
+        .collect()
+}
+
+fn regions_from_ocr_text(text: &str) -> Vec<DocumentTextRegion> {
+    regions_from_text(text)
+        .into_iter()
+        .map(|mut region| {
+            region.ocr = Some(OcrRegionEvidence {
+                block_kind: None,
+                confidence: None,
+                region: None,
+            });
+            region
+        })
+        .collect()
+}
+
+fn regions_from_ocr(document: &OcrDocument, normalized_text: &str) -> Vec<DocumentTextRegion> {
+    let document_confidence = document.confidence.map(|confidence| confidence.value());
+    let metadata = ocr_line_metadata(document, document_confidence);
+    let mut metadata_cursor = 0;
+
+    normalized_text
+        .lines()
+        .enumerate()
+        .map(|(line_index, line)| {
+            let matched = metadata[metadata_cursor..]
+                .iter()
+                .position(|candidate| candidate.text == line)
+                .map(|offset| metadata_cursor + offset);
+            let ocr = matched
+                .map(|index| {
+                    metadata_cursor = index + 1;
+                    metadata[index].evidence.clone()
+                })
+                .unwrap_or(OcrRegionEvidence {
+                    block_kind: None,
+                    confidence: document_confidence,
+                    region: None,
+                });
+
+            DocumentTextRegion {
+                source_line_index: line_index as u32,
+                text: line.to_string(),
+                role: DocumentTextRole::Content,
+                confidence: None,
+                evidence: Vec::new(),
+                ocr: Some(ocr),
+                column_index: None,
+                include_in_reading: true,
+            }
+        })
+        .collect()
+}
+
+fn ocr_line_metadata(
+    document: &OcrDocument,
+    document_confidence: Option<u8>,
+) -> Vec<OcrLineMetadata> {
+    let mut metadata = Vec::new();
+
+    for block in &document.blocks {
+        let block_kind = Some(ocr_block_kind_name(&block.kind));
+        let block_confidence = block
+            .confidence
+            .map(|confidence| confidence.value())
+            .or(document_confidence);
+        let block_region = block.region.as_ref().map(|region| DocumentPixelRegion {
+            x: region.x,
+            y: region.y,
+            width: region.width,
+            height: region.height,
+        });
+
+        if block.lines.is_empty() {
+            push_ocr_metadata_lines(
+                &mut metadata,
+                &block.text,
+                OcrRegionEvidence {
+                    block_kind,
+                    confidence: block_confidence,
+                    region: block_region,
+                },
+            );
+            continue;
+        }
+
+        for line in &block.lines {
+            let line_region = line
+                .region
+                .as_ref()
+                .map(|region| DocumentPixelRegion {
+                    x: region.x,
+                    y: region.y,
+                    width: region.width,
+                    height: region.height,
+                })
+                .or(block_region);
+            let line_confidence = line
+                .confidence
+                .map(|confidence| confidence.value())
+                .or(block_confidence);
+            push_ocr_metadata_lines(
+                &mut metadata,
+                &line.text,
+                OcrRegionEvidence {
+                    block_kind: block_kind.clone(),
+                    confidence: line_confidence,
+                    region: line_region,
+                },
+            );
+        }
+    }
+
+    metadata
+}
+
+fn push_ocr_metadata_lines(
+    metadata: &mut Vec<OcrLineMetadata>,
+    text: &str,
+    evidence: OcrRegionEvidence,
+) {
+    for line in normalize_whitespace(text).lines() {
+        metadata.push(OcrLineMetadata {
+            text: line.to_string(),
+            evidence: evidence.clone(),
+        });
+    }
+}
+
+fn ocr_block_kind_name(kind: &OcrBlockKind) -> String {
+    match kind {
+        OcrBlockKind::Paragraph => "paragraph".to_string(),
+        OcrBlockKind::Heading => "heading".to_string(),
+        OcrBlockKind::Table => "table".to_string(),
+        OcrBlockKind::Form => "form".to_string(),
+        OcrBlockKind::Caption => "caption".to_string(),
+        OcrBlockKind::Custom(value) => value.clone(),
+    }
+}
+
+fn regions_match_lines(regions: &[DocumentTextRegion], lines: &[String]) -> bool {
+    regions.len() == lines.len()
+        && regions
+            .iter()
+            .zip(lines)
+            .all(|(region, line)| region.text == *line)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum MarginPosition {
+    Top,
+    Bottom,
+}
+
+fn sequential_page_number_lines(pages: &[ExtractedPage]) -> BTreeMap<u32, BTreeSet<usize>> {
+    let mut matches: BTreeMap<u32, BTreeSet<usize>> = BTreeMap::new();
+
+    for position in [MarginPosition::Top, MarginPosition::Bottom] {
+        let candidates = pages
+            .iter()
+            .filter_map(|page| {
+                let lines = page.text.lines().collect::<Vec<_>>();
+                let (line_index, line) = margin_line(&lines, position, None)?;
+                let value = line.parse::<i64>().ok()?;
+                Some((page.page_number, line_index, value))
+            })
+            .collect::<Vec<_>>();
+
+        if candidates.len() < 2 || !is_sequential_page_number_run(&candidates) {
+            continue;
+        }
+
+        for (page_number, line_index, _) in candidates {
+            matches.entry(page_number).or_default().insert(line_index);
+        }
+    }
+
+    matches
+}
+
+fn is_sequential_page_number_run(candidates: &[(u32, usize, i64)]) -> bool {
+    candidates.windows(2).all(|window| {
+        let (first_page, _, first_value) = window[0];
+        let (second_page, _, second_value) = window[1];
+        second_value - first_value == i64::from(second_page) - i64::from(first_page)
+    })
+}
+
+fn recurring_margin_lines(
+    pages: &[ExtractedPage],
+    position: MarginPosition,
+    excluded: &BTreeMap<u32, BTreeSet<usize>>,
+) -> BTreeMap<String, Vec<(u32, usize)>> {
+    let mut occurrences: BTreeMap<String, Vec<(u32, usize)>> = BTreeMap::new();
+
+    for page in pages {
+        let lines = page.text.lines().collect::<Vec<_>>();
+        let excluded_indices = excluded.get(&page.page_number);
+        if let Some((line_index, line)) = margin_line(&lines, position, excluded_indices) {
+            occurrences
+                .entry(line.to_string())
+                .or_default()
+                .push((page.page_number, line_index));
+        }
+    }
+
+    occurrences.retain(|_, matches| matches.len() > 1);
     occurrences
+}
+
+fn margin_line<'a>(
+    lines: &'a [&'a str],
+    position: MarginPosition,
+    excluded: Option<&BTreeSet<usize>>,
+) -> Option<(usize, &'a str)> {
+    let is_candidate = |line_index: usize, line: &str| {
+        !line.trim().is_empty()
+            && !excluded.is_some_and(|indices| indices.contains(&line_index))
+    };
+
+    match position {
+        MarginPosition::Top => lines.iter().enumerate().find_map(|(line_index, line)| {
+            is_candidate(line_index, line).then(|| (line_index, line.trim()))
+        }),
+        MarginPosition::Bottom => lines
+            .iter()
+            .enumerate()
+            .rev()
+            .find_map(|(line_index, line)| {
+                is_candidate(line_index, line).then(|| (line_index, line.trim()))
+            }),
+    }
+}
+
+fn repeated_margin_diagnostics(
+    headers: &BTreeMap<String, Vec<(u32, usize)>>,
+    footers: &BTreeMap<String, Vec<(u32, usize)>>,
+) -> Vec<CleanupDiagnostic> {
+    headers
+        .iter()
+        .chain(footers)
+        .map(|(text, occurrences)| CleanupDiagnostic {
+            kind: CleanupDiagnosticKind::RepeatedMarginArtifact,
+            text: text.clone(),
+            pages: occurrences
+                .iter()
+                .map(|(page_number, _)| *page_number)
+                .collect(),
+        })
+        .collect()
+}
+
+fn margin_position_evidence(line_index: usize, line_count: usize) -> DocumentTextEvidence {
+    if line_index == 0 {
+        DocumentTextEvidence::TopMargin
+    } else if line_index + 1 == line_count {
+        DocumentTextEvidence::BottomMargin
+    } else {
+        unreachable!("page-number candidates are only collected from page margins")
+    }
 }
 
 fn normalize_whitespace(text: &str) -> String {
@@ -194,8 +1181,4 @@ fn normalize_whitespace(text: &str) -> String {
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-fn is_page_number(line: &str) -> bool {
-    !line.is_empty() && line.chars().all(|character| character.is_ascii_digit())
 }

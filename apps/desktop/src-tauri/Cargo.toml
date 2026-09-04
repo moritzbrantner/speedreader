@@ -14,3 +14,4 @@ image-analysis-ocr = { package = "moenarch-image-analysis-ocr", git = "https://g
 serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
+video-analysis-core = { package = "moenarch-video-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "e683c365ae4f736ea389258fe6a6683849dd3edc" }
