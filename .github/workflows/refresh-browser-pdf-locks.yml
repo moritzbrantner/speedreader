@@ -79,8 +79,10 @@ jobs:
                   1,
               )
           for signature in [
+              "struct OcrLineMetadata {",
               "fn regions_from_ocr(document: &OcrDocument, normalized_text: &str) -> Vec<DocumentTextRegion> {",
               "fn ocr_line_metadata(",
+              "fn push_ocr_metadata_lines(",
               "fn ocr_block_kind_name(kind: &OcrBlockKind) -> String {",
           ]:
               if signature in lib and f'#[cfg(feature = "structured-ocr")]\n{signature}' not in lib:
@@ -104,6 +106,11 @@ jobs:
           wasm_lib_path = Path("crates/document-extraction-wasm/src/lib.rs")
           wasm_lib = wasm_lib_path.read_text()
           wasm_lib = wasm_lib.replace("use image_analysis_ocr::OcrPreset;\n", "", 1)
+          wasm_lib = wasm_lib.replace(
+              "    fn preset(&self) -> OcrPreset {",
+              "    fn preset(&self) -> document_extraction::OcrPreset {",
+              1,
+          )
           wasm_lib = wasm_lib.replace(
               "        OcrPreset::TrOcrBasePrintedOnnx",
               "        document_extraction::OcrPreset::TrOcrBasePrintedOnnx",
