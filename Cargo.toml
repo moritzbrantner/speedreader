@@ -1,4 +1,8 @@
 [workspace]
-members = ["apps/server", "crates/document-extraction"]
+members = [
+    "apps/server",
+    "crates/document-extraction",
+    "crates/document-extraction-wasm",
+]
 exclude = ["apps/desktop/src-tauri"]
 resolver = "2"

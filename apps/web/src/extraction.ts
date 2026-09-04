@@ -1,3 +1,5 @@
+import { extractPdfInBrowser, type BrowserPdfExtractionProgress } from "./browser-pdf-extraction";
+
 export type ReadingDocument = Readonly<{
   version: number;
   text: string;
@@ -98,14 +100,32 @@ export type ExtractionResult =
   | Readonly<{ ok: false; message: string }>;
 
 type Fetch = (input: string, init: RequestInit) => Promise<Response>;
+type BrowserPdfExtractor = (
+  file: Blob,
+  onProgress?: (progress: BrowserPdfExtractionProgress) => void,
+) => Promise<unknown>;
 
 export async function extractPdfDocument(
   file: Blob,
   serviceUrl: string | undefined,
   fetchImplementation: Fetch = fetch,
+  browserExtraction: BrowserPdfExtractor = extractPdfInBrowser,
+  onProgress?: (progress: BrowserPdfExtractionProgress) => void,
 ): Promise<ExtractionResult> {
   if (serviceUrl === undefined || serviceUrl === "") {
-    return { ok: false, message: "PDF extraction is not configured for this static deployment." };
+    let payload: unknown;
+    try {
+      payload = await browserExtraction(file, onProgress);
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : "Local browser PDF extraction failed.",
+      };
+    }
+    if (!isReadingDocument(payload)) {
+      return { ok: false, message: "Local browser PDF extraction returned an invalid reading document." };
+    }
+    return { ok: true, document: payload };
   }
 
   let response: Response;

@@ -4,15 +4,17 @@
   "packageManager": "bun@1.4.0",
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
-    "build": "turbo run build",
-    "ci": "bun run lint && bun run typecheck && bun run test && bun run document-extraction:test && bun run build && bun run cargo:check",
+    "build": "bun run wasm:build && turbo run build",
+    "ci": "bun run lint && bun run typecheck && bun run test && bun run document-extraction:test && bun run wasm:check && bun run build && bun run cargo:check",
     "cargo:check": "cargo check --workspace",
     "desktop:build": "bun --filter @speedreader/desktop build",
     "desktop:bundle": "bun --filter @speedreader/desktop bundle",
     "document-extraction:test": "cargo test -p document-extraction",
     "lint": "bunx oxlint@1.80.0 apps packages --format=github && turbo run lint",
     "test": "turbo run test && bun test tests",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "wasm:build": "bash scripts/build-document-extraction-wasm.sh",
+    "wasm:check": "cargo check --target wasm32-unknown-unknown -p document-extraction-wasm"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
