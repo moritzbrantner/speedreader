@@ -38,6 +38,7 @@ const readerPersistence = createPlatformReaderPersistence();
 
 export function ReaderScreen() {
   const [extraction, setExtraction] = useState<ExtractionResult | undefined>();
+  const [importError, setImportError] = useState<string | undefined>();
   const [importingPdf, setImportingPdf] = useState(false);
   const [desktopAvailable, setDesktopAvailable] = useState(false);
   const [desktopProgress, setDesktopProgress] = useState<DesktopExtractionProgress | undefined>();
@@ -84,16 +85,20 @@ export function ReaderScreen() {
 
   const importPdf = async (file: File | undefined) => {
     if (file === undefined) return;
-    setExtraction(undefined);
+    setImportError(undefined);
     setImportingPdf(true);
     const result = await extractPdfDocument(file, process.env.NEXT_PUBLIC_EXTRACTION_URL);
     setImportingPdf(false);
-    setExtraction(result);
-    if (result.ok) openExtractedDocument(file.name, "pdf", result.document);
+    if (result.ok) {
+      setExtraction(result);
+      openExtractedDocument(file.name, "pdf", result.document);
+    } else {
+      setImportError(result.message);
+    }
   };
 
   const openNativeDocument = async () => {
-    setExtraction(undefined);
+    setImportError(undefined);
     const result = await openDesktopDocument(setDesktopProgress);
     setDesktopProgress(undefined);
     if (result.status === "opened") {
@@ -104,7 +109,7 @@ export function ReaderScreen() {
       );
       setExtraction({ ok: true, document: result.document });
     } else if (result.status === "error") {
-      setExtraction({ ok: false, message: result.message });
+      setImportError(result.message);
     }
   };
 
@@ -113,7 +118,7 @@ export function ReaderScreen() {
     regionOverrides: SemanticRegionOverrides,
   ) => {
     if (!extraction?.ok) return;
-    reader.setText(projectDocumentText(extraction.document, roleModes, regionOverrides));
+    reader.setReadingText(projectDocumentText(extraction.document, roleModes, regionOverrides));
   };
 
   const updateSemanticRole = (role: DocumentTextRole, mode: SemanticFilterMode) => {
@@ -142,7 +147,7 @@ export function ReaderScreen() {
   const resetSemanticFilters = () => {
     setSemanticRoleModes({});
     setSemanticRegionOverrides({});
-    if (extraction?.ok) reader.setText(extraction.document.text);
+    if (extraction?.ok) reader.setReadingText(extraction.document.text);
   };
 
   const semanticStats = extraction?.ok
@@ -170,6 +175,7 @@ export function ReaderScreen() {
           value={reader.document.text}
           onChange={(event) => {
             setExtraction(undefined);
+            setImportError(undefined);
             setSemanticRoleModes({});
             setSemanticRegionOverrides({});
             reader.setText(event.target.value);
@@ -183,7 +189,7 @@ export function ReaderScreen() {
       </label>
       {importingPdf ? <p role="status">Extracting PDF locally… Scanned pages may load OCR models on first use.</p> : null}
       {desktopProgress !== undefined ? <p role="status">{desktopProgressMessage(desktopProgress)}</p> : null}
-      {extraction !== undefined && !extraction.ok ? <p role="status">{extraction.message}</p> : null}
+      {importError !== undefined ? <p role="status">{importError}</p> : null}
       {extraction?.ok ? <p role="status">Imported {extraction.document.pages.length} pages.</p> : null}
       {extraction?.ok && hasSemanticMetadata ? (
         <section aria-labelledby="semantic-filters-heading" style={{ display: "grid", gap: 16 }}>
