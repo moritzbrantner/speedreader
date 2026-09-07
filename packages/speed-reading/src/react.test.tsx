@@ -148,6 +148,38 @@ test("the durable controller restores validated progress paused and saves later 
   act(() => renderer?.unmount());
 });
 
+test("transient reading text preserves the durable source document", async () => {
+  let saved: PersistedReaderState | undefined;
+  const persistence: ReaderPersistence = {
+    async load() {
+      return undefined;
+    },
+    async save(state) {
+      saved = state;
+    },
+  };
+  let renderer: ReturnType<typeof create> | undefined;
+
+  await act(async () => {
+    renderer = create(<DurableHarness persistence={persistence} />);
+    await Promise.resolve();
+  });
+
+  await act(async () => {
+    durableController?.setReadingText("projected reading only");
+    await Promise.resolve();
+  });
+
+  expect(durableController?.document.text).toBe("fallback words");
+  expect(durableController?.chunks.map((chunk) => chunk.text)).toEqual([
+    "projected",
+    "reading",
+    "only",
+  ]);
+  expect(saved?.recentDocuments[0]?.text).toBe("fallback words");
+  act(() => renderer?.unmount());
+});
+
 test("the durable controller remains usable when persistence rejects", async () => {
   const persistence: ReaderPersistence = {
     async load() {
