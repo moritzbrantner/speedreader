@@ -50,6 +50,7 @@ export type DurableSpeedReaderController = SpeedReaderController & Readonly<{
   document: ReadingDocument;
   restored: boolean;
   openDocument: (document: ReadingDocument) => void;
+  setReadingText: (text: string) => void;
   setText: (text: string) => void;
 }>;
 
@@ -188,6 +189,10 @@ export function useDurableSpeedReader(
     setSession(restoreReadingSession(nextDocument, persistedState.current));
   }, []);
 
+  const setReadingText = useCallback((text: string) => {
+    setSession((currentSession) => createReadingSession(text, currentSession.settings));
+  }, []);
+
   const setText = useCallback((text: string) => {
     setDocument((currentDocument) => ({
       ...currentDocument,
@@ -210,6 +215,7 @@ export function useDurableSpeedReader(
     play: () => dispatch({ type: "play" }),
     seek: (chunkIndex) => dispatch({ type: "seek", chunkIndex }),
     setChunkSize: (chunkSize) => dispatch({ type: "set-chunk-size", chunkSize }),
+    setReadingText,
     setText,
     setWordsPerMinute: (wordsPerMinute) => dispatch({ type: "set-wpm", wordsPerMinute }),
   };
