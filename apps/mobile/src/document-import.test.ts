@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { PdfExtractionAdapter } from "./document-extraction";
+import type { PdfExtractionAdapter, ReadingDocument } from "./document-extraction";
 import { createDocumentImportAdapter, type PickedDocument } from "./document-import";
 
 const unusedPdfExtraction: PdfExtractionAdapter = {
@@ -34,7 +34,7 @@ describe("document import", () => {
   });
 
   test("routes PDFs through extraction and preserves the canonical document", async () => {
-    const document = {
+    const document: ReadingDocument = {
       version: 1,
       text: "Recognized PDF words",
       pages: [{
