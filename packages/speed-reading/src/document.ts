@@ -1,5 +1,5 @@
 export type ReadingDocument = Readonly<{
-  version: number;
+  version: 1;
   text: string;
   pages: readonly ExtractedPage[];
   diagnostics: readonly CleanupDiagnostic[];
@@ -94,7 +94,7 @@ export type CleanupDiagnostic = Readonly<{
 }>;
 
 export function isReadingDocument(value: unknown): value is ReadingDocument {
-  if (!isRecord(value) || !Number.isInteger(value.version) || Number(value.version) < 1) return false;
+  if (!isRecord(value) || value.version !== 1) return false;
 
   return (
     typeof value.text === "string" &&
