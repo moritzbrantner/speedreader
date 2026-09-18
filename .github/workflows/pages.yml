@@ -1,57 +1,124 @@
 name: Deploy speedreader to GitHub Pages
 
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: github-pages
   cancel-in-progress: true
 
 jobs:
+  browser-runtime:
+    name: Reuse validated browser runtime
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    uses: moritzbrantner/reusable-workflows/.github/workflows/build-artifact.yml@c3ffc400a479e8574dc299b81fe9ce44f71dd53f
+    with:
+      source_sha: ${{ github.event.workflow_run.head_sha || github.sha }}
+      artifact_key: speedreader-browser-runtime-v1
+      bun_version: "1.4.0"
+      rust_toolchain: "1.98.1"
+      rust_targets: wasm32-unknown-unknown
+      cache_bun: true
+      bun_cache_dependency_path: bun.lock
+      cache_cargo: true
+      cargo_cache_dependency_path: Cargo.lock
+      cargo_tool_cache_key: rust-1.98.1-wasm-bindgen-cli-0.2.127
+      use_environment_v1: false
+      setup_command: |
+        bun install --frozen-lockfile
+        cargo install wasm-bindgen-cli --version 0.2.127 --locked
+      build_command: |
+        bun run wasm:build
+        rm -rf .artifacts/browser-runtime
+        mkdir -p .artifacts/browser-runtime
+        cp -R apps/web/public/wasm .artifacts/browser-runtime/wasm
+        cp -R apps/web/public/pdfjs .artifacts/browser-runtime/pdfjs
+      artifact_paths: .artifacts/browser-runtime
+      reuse_across_runs: true
+      expected_consumers: 2
+      artifact_retention_days: 7
+      timeout_minutes: 30
+
   build:
+    name: Compose Pages from verified browser runtime
+    needs: browser-runtime
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pages: write
     steps:
-      - name: Checkout
+      - name: Checkout exact source
         uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.browser-runtime.outputs.source_sha }}
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.0
-      - name: Setup Rust/WASM target
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - name: Install wasm-bindgen CLI
-        run: cargo install wasm-bindgen-cli --version 0.2.127 --locked
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
+
       - name: Install workspace dependencies
         run: bun install --frozen-lockfile
-      - name: Build browser PDF runtime
-        run: bun run wasm:build
+
+      - name: Consume verified browser runtime
+        uses: moritzbrantner/reusable-workflows/.github/actions/consume-build-artifact@c3ffc400a479e8574dc299b81fe9ce44f71dd53f
+        with:
+          producer_run_id: ${{ needs.browser-runtime.outputs.producer_run_id }}
+          receipt_artifact_name: ${{ needs.browser-runtime.outputs.receipt_artifact_name }}
+          artifact_name: ${{ needs.browser-runtime.outputs.artifact_name }}
+          artifact_digest: ${{ needs.browser-runtime.outputs.artifact_digest }}
+          source_sha: ${{ needs.browser-runtime.outputs.source_sha }}
+          artifact_key: ${{ needs.browser-runtime.outputs.artifact_key }}
+          identity_digest: ${{ needs.browser-runtime.outputs.identity_digest }}
+          destination_path: .artifacts/verified-browser-runtime
+          github_token: ${{ github.token }}
+
+      - name: Stage browser runtime
+        run: |
+          rm -rf apps/web/public/wasm apps/web/public/pdfjs
+          mkdir -p apps/web/public
+          cp -R .artifacts/verified-browser-runtime/wasm apps/web/public/wasm
+          cp -R .artifacts/verified-browser-runtime/pdfjs apps/web/public/pdfjs
+
       - name: Build static web app
         env:
           GITHUB_PAGES: "true"
           NEXT_TELEMETRY_DISABLED: "1"
         run: bun --filter @speedreader/web build
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
           path: apps/web/out
 
   deploy:
+    name: Deploy Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
