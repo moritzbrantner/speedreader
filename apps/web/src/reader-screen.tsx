@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { type ReaderSettings } from "@moritzbrantner/speed-reading/core";
 import { readerFixture } from "@moritzbrantner/speed-reading/fixture";
 import { createReadingDocument } from "@moritzbrantner/speed-reading/persistence";
 import { useDurableSpeedReader } from "@moritzbrantner/speed-reading/react";
@@ -18,6 +19,10 @@ import {
 } from "./desktop-extraction";
 import { createPlatformReaderPersistence } from "./platform-persistence";
 import { SemanticPagePreviews } from "./semantic-page-previews";
+import {
+  createSpeedreaderSettingsController,
+  type SpeedreaderSettingsController,
+} from "./settings-foundation";
 import {
   projectDocumentText,
   regionIncludedBySemanticFilters,
@@ -46,6 +51,9 @@ export function ReaderScreen() {
   const [desktopProgress, setDesktopProgress] = useState<DesktopExtractionProgress | undefined>();
   const [semanticRoleModes, setSemanticRoleModes] = useState<SemanticRoleModes>({});
   const [semanticRegionOverrides, setSemanticRegionOverrides] = useState<SemanticRegionOverrides>({});
+  const [settingsController, setSettingsController] = useState<SpeedreaderSettingsController | undefined>();
+  const [settingsStatus, setSettingsStatus] = useState<string | undefined>();
+  const settingsLoadStarted = useRef(false);
   const reader = useDurableSpeedReader({ initialDocument, persistence: readerPersistence });
   const toggle = useCallback(() => {
     if (reader.isPlaying) reader.pause();
@@ -55,6 +63,39 @@ export function ReaderScreen() {
   useEffect(() => {
     setDesktopAvailable(isDesktopShell());
   }, []);
+
+  useEffect(() => {
+    if (!reader.restored || settingsLoadStarted.current) return;
+    settingsLoadStarted.current = true;
+    let active = true;
+
+    void createSpeedreaderSettingsController(reader.settings)
+      .then((controller) => {
+        if (!active) {
+          controller.dispose();
+          return;
+        }
+        const snapshot = controller.snapshot();
+        setSettingsController(controller);
+        setSettingsStatus(controller.restoreNotice);
+        setSemanticRoleModes(snapshot.semanticRoleModes);
+        applyReaderSettings(snapshot.reader);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setSettingsStatus(
+          error instanceof Error
+            ? `Shared settings are unavailable: ${error.message}`
+            : "Shared settings are unavailable.",
+        );
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [reader.restored]);
+
+  useEffect(() => () => settingsController?.dispose(), [settingsController]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -70,12 +111,28 @@ export function ReaderScreen() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [reader, toggle]);
 
+  const applyReaderSettings = (settings: ReaderSettings) => {
+    if (reader.settings.wordsPerMinute !== settings.wordsPerMinute) {
+      reader.setWordsPerMinute(settings.wordsPerMinute);
+    }
+    if (reader.settings.chunkSize !== settings.chunkSize) {
+      reader.setChunkSize(settings.chunkSize);
+    }
+    if (reader.settings.segmentation !== settings.segmentation) {
+      reader.setSegmentation(settings.segmentation);
+    }
+  };
+
+  const updateReaderSettings = (settings: ReaderSettings) => {
+    const effective = settingsController?.setReaderSettings(settings).reader ?? settings;
+    applyReaderSettings(effective);
+  };
+
   const openExtractedDocument = (
     title: string,
     source: "pdf" | "plain-text",
     document: ReadingDocument,
   ) => {
-    setSemanticRoleModes({});
     setSemanticRegionOverrides({});
     reader.openDocument(createReadingDocument({
       title,
@@ -127,11 +184,17 @@ export function ReaderScreen() {
   };
 
   const updateSemanticRole = (role: DocumentTextRole, mode: SemanticFilterMode) => {
-    const nextRoleModes: Partial<Record<DocumentTextRole, SemanticFilterMode>> = {
-      ...semanticRoleModes,
-    };
-    if (mode === "default") delete nextRoleModes[role];
-    else nextRoleModes[role] = mode;
+    let nextRoleModes: SemanticRoleModes;
+    if (settingsController !== undefined) {
+      nextRoleModes = settingsController.setSemanticRoleMode(role, mode).semanticRoleModes;
+    } else {
+      const fallback: Partial<Record<DocumentTextRole, SemanticFilterMode>> = {
+        ...semanticRoleModes,
+      };
+      if (mode === "default") delete fallback[role];
+      else fallback[role] = mode;
+      nextRoleModes = fallback;
+    }
     setSemanticRoleModes(nextRoleModes);
     applySemanticProjection(nextRoleModes, semanticRegionOverrides);
   };
@@ -150,9 +213,13 @@ export function ReaderScreen() {
   };
 
   const resetSemanticFilters = () => {
-    setSemanticRoleModes({});
+    const nextRoleModes =
+      settingsController?.resetSemanticRoleModes().semanticRoleModes ?? {};
+    setSemanticRoleModes(nextRoleModes);
     setSemanticRegionOverrides({});
-    if (extraction?.ok) reader.setReadingText(extraction.document.text);
+    if (extraction?.ok) {
+      reader.setReadingText(projectDocumentText(extraction.document, nextRoleModes, {}));
+    }
   };
 
   const semanticStats = extraction?.ok
@@ -182,7 +249,6 @@ export function ReaderScreen() {
             setExtraction(undefined);
             setImportError(undefined);
             setPreviewPdf(undefined);
-            setSemanticRoleModes({});
             setSemanticRegionOverrides({});
             reader.setText(event.target.value);
           }}
@@ -195,6 +261,7 @@ export function ReaderScreen() {
       </label>
       {importingPdf ? <p role="status">Extracting PDF locally… Scanned pages may load OCR models on first use.</p> : null}
       {desktopProgress !== undefined ? <p role="status">{desktopProgressMessage(desktopProgress)}</p> : null}
+      {settingsStatus !== undefined ? <p role="status">{settingsStatus}</p> : null}
       {importError !== undefined ? <p role="status">{importError}</p> : null}
       {extraction?.ok ? <p role="status">Imported {extraction.document.pages.length} pages.</p> : null}
       {extraction?.ok && hasSemanticMetadata ? (
@@ -309,12 +376,46 @@ export function ReaderScreen() {
         </div>
         <label>
           Words per minute {reader.settings.wordsPerMinute}
-          <input type="range" min="60" max="900" step="10" value={reader.settings.wordsPerMinute} onChange={(event) => reader.setWordsPerMinute(Number(event.target.value))} />
+          <input
+            type="range"
+            min="60"
+            max="1200"
+            step="10"
+            value={reader.settings.wordsPerMinute}
+            onChange={(event) =>
+              updateReaderSettings({
+                ...reader.settings,
+                wordsPerMinute: Number(event.target.value),
+              })}
+          />
         </label>
         <label>
           Words per chunk
-          <select value={reader.settings.chunkSize} onChange={(event) => reader.setChunkSize(Number(event.target.value))}>
-            {[1, 2, 3, 4].map((size) => <option key={size} value={size}>{size}</option>)}
+          <select
+            value={reader.settings.chunkSize}
+            onChange={(event) =>
+              updateReaderSettings({
+                ...reader.settings,
+                chunkSize: Number(event.target.value),
+              })}
+          >
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Text segmentation
+          <select
+            value={reader.settings.segmentation}
+            onChange={(event) =>
+              updateReaderSettings({
+                ...reader.settings,
+                segmentation: event.target.value as ReaderSettings["segmentation"],
+              })}
+          >
+            <option value="whitespace">Whitespace</option>
+            <option value="punctuation">Punctuation-aware</option>
           </select>
         </label>
       </section>
