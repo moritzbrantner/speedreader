@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 
+import type { DocumentTextRole, ReadingDocument } from "@moritzbrantner/speed-reading/document";
 import { readerFixture } from "@moritzbrantner/speed-reading/fixture";
 import {
   createReadingDocument,
@@ -23,6 +24,15 @@ import {
   useDurableSpeedReader,
   type SpeedReaderController,
 } from "@moritzbrantner/speed-reading/react";
+import {
+  projectDocumentText,
+  regionIncludedBySemanticFilters,
+  semanticReviewRegions,
+  semanticRoleStats,
+  type SemanticFilterMode,
+  type SemanticRegionOverrides,
+  type SemanticRoleModes,
+} from "@moritzbrantner/speed-reading/semantic-filter";
 
 import type { DocumentImportAdapter, DocumentImportResult } from "./document-import";
 import { readerLayoutMode } from "./reader-layout";
@@ -75,6 +85,9 @@ const initialDocument = createReadingDocument({
 
 export function ReaderScreen({ documentImporter, persistence }: ReaderScreenProps) {
   const [importState, setImportState] = useState<ImportState>({ status: "idle" });
+  const [semanticDocument, setSemanticDocument] = useState<ReadingDocument | undefined>();
+  const [semanticRoleModes, setSemanticRoleModes] = useState<SemanticRoleModes>({});
+  const [semanticRegionOverrides, setSemanticRegionOverrides] = useState<SemanticRegionOverrides>({});
   const dimensions = useWindowDimensions();
   const layout = readerLayoutMode(dimensions.width, dimensions.height);
   const colorScheme = useColorScheme();
@@ -93,6 +106,9 @@ export function ReaderScreen({ documentImporter, persistence }: ReaderScreenProp
       return;
     }
 
+    setSemanticRoleModes({});
+    setSemanticRegionOverrides({});
+    setSemanticDocument(result.source === "pdf" ? result.document : undefined);
     reader.openDocument(createReadingDocument({
       title: result.fileName,
       text: result.text,
@@ -101,6 +117,50 @@ export function ReaderScreen({ documentImporter, persistence }: ReaderScreenProp
     }));
     setImportState({ status: "success", message: importMessage(result) });
   }, [documentImporter, reader]);
+
+  const applySemanticProjection = (
+    roleModes: SemanticRoleModes,
+    regionOverrides: SemanticRegionOverrides,
+  ) => {
+    if (semanticDocument === undefined) return;
+    reader.setReadingText(projectDocumentText(semanticDocument, roleModes, regionOverrides));
+  };
+
+  const updateSemanticRole = (role: DocumentTextRole, mode: SemanticFilterMode) => {
+    const nextRoleModes: Partial<Record<DocumentTextRole, SemanticFilterMode>> = {
+      ...semanticRoleModes,
+    };
+    if (mode === "default") delete nextRoleModes[role];
+    else nextRoleModes[role] = mode;
+    setSemanticRoleModes(nextRoleModes);
+    applySemanticProjection(nextRoleModes, semanticRegionOverrides);
+  };
+
+  const updateSemanticRegion = (key: string, included: boolean) => {
+    const nextRegionOverrides = { ...semanticRegionOverrides, [key]: included };
+    setSemanticRegionOverrides(nextRegionOverrides);
+    applySemanticProjection(semanticRoleModes, nextRegionOverrides);
+  };
+
+  const clearSemanticRegion = (key: string) => {
+    const nextRegionOverrides = { ...semanticRegionOverrides };
+    delete nextRegionOverrides[key];
+    setSemanticRegionOverrides(nextRegionOverrides);
+    applySemanticProjection(semanticRoleModes, nextRegionOverrides);
+  };
+
+  const resetSemanticFilters = () => {
+    setSemanticRoleModes({});
+    setSemanticRegionOverrides({});
+    if (semanticDocument !== undefined) reader.setReadingText(semanticDocument.text);
+  };
+
+  const updateSourceText = (text: string) => {
+    setSemanticDocument(undefined);
+    setSemanticRoleModes({});
+    setSemanticRegionOverrides({});
+    reader.setText(text);
+  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
@@ -152,10 +212,10 @@ export function ReaderScreen({ documentImporter, persistence }: ReaderScreenProp
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: theme.text }]}>Source text</Text>
               <TextInput
-                accessibilityHint="Editing the text resets reading progress"
+                accessibilityHint="Editing the text resets reading progress and PDF semantic filters"
                 accessibilityLabel="Source text"
                 multiline
-                onChangeText={reader.setText}
+                onChangeText={updateSourceText}
                 placeholder="Paste or type text to read"
                 placeholderTextColor={theme.textMuted}
                 style={[
@@ -170,6 +230,19 @@ export function ReaderScreen({ documentImporter, persistence }: ReaderScreenProp
                 value={reader.document.text}
               />
             </View>
+
+            {semanticDocument === undefined ? null : (
+              <SemanticFiltersPanel
+                document={semanticDocument}
+                onRegionOverride={updateSemanticRegion}
+                onRegionReset={clearSemanticRegion}
+                onReset={resetSemanticFilters}
+                onRoleMode={updateSemanticRole}
+                regionOverrides={semanticRegionOverrides}
+                roleModes={semanticRoleModes}
+                theme={theme}
+              />
+            )}
           </View>
 
           <ReaderPanel reader={reader} theme={theme} wide={layout === "wide"} />
@@ -191,6 +264,171 @@ function ImportStatus({ state, theme }: Readonly<{ state: ImportState; theme: Th
     >
       {state.message}
     </Text>
+  );
+}
+
+type SemanticFiltersPanelProps = Readonly<{
+  document: ReadingDocument;
+  onRegionOverride: (key: string, included: boolean) => void;
+  onRegionReset: (key: string) => void;
+  onReset: () => void;
+  onRoleMode: (role: DocumentTextRole, mode: SemanticFilterMode) => void;
+  regionOverrides: SemanticRegionOverrides;
+  roleModes: SemanticRoleModes;
+  theme: Theme;
+}>;
+
+function SemanticFiltersPanel({
+  document,
+  onRegionOverride,
+  onRegionReset,
+  onReset,
+  onRoleMode,
+  regionOverrides,
+  roleModes,
+  theme,
+}: SemanticFiltersPanelProps) {
+  const roleStats = semanticRoleStats(document, roleModes, regionOverrides)
+    .filter((stats) => stats.regionCount > 0);
+  const reviewRegions = semanticReviewRegions(document);
+  if (roleStats.length === 0) return null;
+
+  const hasOverrides =
+    Object.keys(roleModes).length > 0 || Object.keys(regionOverrides).length > 0;
+
+  return (
+    <View
+      accessibilityLabel="Semantic filters"
+      style={[styles.semanticPanel, { backgroundColor: theme.surface, borderColor: theme.border }]}
+    >
+      <View style={styles.semanticHeader}>
+        <View style={styles.semanticHeaderCopy}>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Semantic filters</Text>
+          <Text style={[styles.semanticDescription, { color: theme.textMuted }]}>
+            Inspect extracted roles and change only the reading projection. The original PDF regions remain intact.
+          </Text>
+        </View>
+        <Pressable
+          accessibilityLabel="Reset semantic filters"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !hasOverrides }}
+          disabled={!hasOverrides}
+          onPress={onReset}
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+            !hasOverrides && styles.disabled,
+            pressed && styles.pressed,
+          ]}
+        >
+          <Text style={[styles.secondaryButtonText, { color: theme.text }]}>Reset</Text>
+        </Pressable>
+      </View>
+
+      {roleStats.map((stats) => {
+        const currentMode = roleModes[stats.role] ?? "default";
+        return (
+          <View key={stats.role} style={[styles.semanticRoleRow, { borderTopColor: theme.border }]}>
+            <Text style={[styles.settingLabel, { color: theme.text }]}>
+              {semanticLabel(stats.role)}
+            </Text>
+            <Text style={[styles.settingValue, { color: theme.textMuted }]}>
+              {stats.regionCount} detected · {stats.effectiveIncludedCount} included
+            </Text>
+            <View style={styles.semanticPolicyRow}>
+              {(["default", "include", "exclude"] as const).map((mode) => {
+                const selected = currentMode === mode;
+                return (
+                  <Pressable
+                    accessibilityLabel={`${semanticLabel(stats.role)} policy ${mode}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected }}
+                    key={mode}
+                    onPress={() => onRoleMode(stats.role, mode)}
+                    style={({ pressed }) => [
+                      styles.semanticPolicyButton,
+                      {
+                        backgroundColor: selected ? theme.action : theme.surfaceMuted,
+                        borderColor: selected ? theme.action : theme.border,
+                      },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.semanticPolicyText,
+                        { color: selected ? theme.actionText : theme.text },
+                      ]}
+                    >
+                      {mode === "default" ? "Default" : mode === "include" ? "Include" : "Exclude"}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        );
+      })}
+
+      {reviewRegions.length === 0 ? null : (
+        <View style={styles.semanticRegions}>
+          <Text style={[styles.settingLabel, { color: theme.text }]}>
+            Classified regions ({reviewRegions.length})
+          </Text>
+          {reviewRegions.map(({ key, pageNumber, region }) => {
+            const included = regionIncludedBySemanticFilters(
+              pageNumber,
+              region,
+              roleModes,
+              regionOverrides,
+            );
+            const overridden = Object.prototype.hasOwnProperty.call(regionOverrides, key);
+            return (
+              <View key={key} style={[styles.semanticRegion, { borderTopColor: theme.border }]}>
+                <Text style={[styles.settingLabel, { color: theme.text }]}>
+                  {semanticLabel(region.role)} · page {pageNumber}
+                </Text>
+                <Text style={[styles.semanticDescription, { color: theme.textMuted }]}>
+                  {region.text}
+                </Text>
+                <View style={styles.semanticRegionActions}>
+                  <Pressable
+                    accessibilityLabel={`${included ? "Exclude" : "Include"} ${semanticLabel(region.role)} region on page ${pageNumber}`}
+                    accessibilityRole="button"
+                    onPress={() => onRegionOverride(key, !included)}
+                    style={({ pressed }) => [
+                      styles.secondaryButton,
+                      { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={[styles.secondaryButtonText, { color: theme.text }]}>
+                      {included ? "Exclude" : "Include"}
+                    </Text>
+                  </Pressable>
+                  {overridden ? (
+                    <Pressable
+                      accessibilityLabel={`Use role policy for ${semanticLabel(region.role)} region on page ${pageNumber}`}
+                      accessibilityRole="button"
+                      onPress={() => onRegionReset(key)}
+                      style={({ pressed }) => [
+                        styles.secondaryButton,
+                        { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Text style={[styles.secondaryButtonText, { color: theme.text }]}>
+                        Use role policy
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -410,9 +648,14 @@ function SmallButton({
 
 function importMessage(result: Extract<DocumentImportResult, { status: "imported" }>): string {
   if (result.source === "pdf") {
-    return `Imported ${result.fileName} (${result.pageCount ?? 0} pages).`;
+    return `Imported ${result.fileName} (${result.pageCount} pages).`;
   }
   return `Imported ${result.fileName}.`;
+}
+
+function semanticLabel(value: string): string {
+  const spaced = value.replace(/([a-z])([A-Z])/g, "$1 $2");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
 function progressPercent(reader: SpeedReaderController): number {
@@ -461,6 +704,41 @@ const styles = StyleSheet.create({
     minHeight: 190,
     padding: 16,
   },
+  semanticPanel: {
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 14,
+    padding: 14,
+  },
+  semanticHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "space-between",
+  },
+  semanticHeaderCopy: { flex: 1, gap: 4 },
+  semanticDescription: { fontSize: 14, lineHeight: 20 },
+  semanticRoleRow: { borderTopWidth: StyleSheet.hairlineWidth, gap: 8, paddingTop: 12 },
+  semanticPolicyRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  semanticPolicyButton: {
+    borderRadius: 9,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  semanticPolicyText: { fontSize: 14, fontWeight: "700" },
+  semanticRegions: { gap: 8 },
+  semanticRegion: { borderTopWidth: StyleSheet.hairlineWidth, gap: 7, paddingTop: 10 },
+  semanticRegionActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  secondaryButton: {
+    borderRadius: 9,
+    borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  secondaryButtonText: { fontSize: 14, fontWeight: "700" },
   readerPanel: {
     borderRadius: 18,
     borderWidth: StyleSheet.hairlineWidth,
