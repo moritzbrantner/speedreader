@@ -60,9 +60,9 @@ fi
 cat > "$SETTINGS_OUT/bridge.js" <<'EOF'
 try {
   const settings = await import("./settings-browser.js");
-  window.__speedreaderSettingsBrowser = settings;
+  window.speedreaderSettingsBrowser = settings;
 } catch (error) {
-  window.__speedreaderSettingsBrowserError =
+  window.speedreaderSettingsBrowserError =
     error instanceof Error ? error.message : String(error);
 } finally {
   window.dispatchEvent(new CustomEvent("speedreader-settings-browser-ready"));
