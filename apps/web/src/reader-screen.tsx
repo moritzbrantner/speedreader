@@ -17,6 +17,7 @@ import {
   type DesktopExtractionProgress,
 } from "./desktop-extraction";
 import { createPlatformReaderPersistence } from "./platform-persistence";
+import { SemanticPagePreviews } from "./semantic-page-previews";
 import {
   projectDocumentText,
   regionIncludedBySemanticFilters,
@@ -40,6 +41,7 @@ export function ReaderScreen() {
   const [extraction, setExtraction] = useState<ExtractionResult | undefined>();
   const [importError, setImportError] = useState<string | undefined>();
   const [importingPdf, setImportingPdf] = useState(false);
+  const [previewPdf, setPreviewPdf] = useState<File | undefined>();
   const [desktopAvailable, setDesktopAvailable] = useState(false);
   const [desktopProgress, setDesktopProgress] = useState<DesktopExtractionProgress | undefined>();
   const [semanticRoleModes, setSemanticRoleModes] = useState<SemanticRoleModes>({});
@@ -86,11 +88,13 @@ export function ReaderScreen() {
   const importPdf = async (file: File | undefined) => {
     if (file === undefined) return;
     setImportError(undefined);
+    setPreviewPdf(undefined);
     setImportingPdf(true);
     const result = await extractPdfDocument(file, process.env.NEXT_PUBLIC_EXTRACTION_URL);
     setImportingPdf(false);
     if (result.ok) {
       setExtraction(result);
+      setPreviewPdf(file);
       openExtractedDocument(file.name, "pdf", result.document);
     } else {
       setImportError(result.message);
@@ -99,6 +103,7 @@ export function ReaderScreen() {
 
   const openNativeDocument = async () => {
     setImportError(undefined);
+    setPreviewPdf(undefined);
     const result = await openDesktopDocument(setDesktopProgress);
     setDesktopProgress(undefined);
     if (result.status === "opened") {
@@ -176,6 +181,7 @@ export function ReaderScreen() {
           onChange={(event) => {
             setExtraction(undefined);
             setImportError(undefined);
+            setPreviewPdf(undefined);
             setSemanticRoleModes({});
             setSemanticRegionOverrides({});
             reader.setText(event.target.value);
@@ -204,6 +210,14 @@ export function ReaderScreen() {
               Reset filters
             </button>
           </div>
+          {previewPdf === undefined ? null : (
+            <SemanticPagePreviews
+              file={previewPdf}
+              document={extraction.document}
+              roleModes={semanticRoleModes}
+              regionOverrides={semanticRegionOverrides}
+            />
+          )}
           <div style={{ overflowX: "auto" }}>
             <table style={{ borderCollapse: "collapse", minWidth: 640, width: "100%" }}>
               <thead>
