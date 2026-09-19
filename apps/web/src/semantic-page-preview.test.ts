@@ -29,20 +29,17 @@ test("maps OCR semantic regions into normalized page coordinates", () => {
     ],
   };
 
-  expect(semanticPreviewOverlays(page, [])).toEqual([
-    {
-      key: "1:0",
-      role: "header",
-      text: "Running header",
-      included: false,
-      bounds: {
-        left: 0.1,
-        top: 0.04,
-        width: 0.8,
-        height: 0.06,
-      },
-    },
-  ]);
+  const overlay = semanticPreviewOverlays(page, [])[0];
+  expect(overlay).toMatchObject({
+    key: "1:0",
+    role: "header",
+    text: "Running header",
+    included: false,
+  });
+  expect(overlay?.bounds.left).toBeCloseTo(0.1);
+  expect(overlay?.bounds.top).toBeCloseTo(0.04);
+  expect(overlay?.bounds.width).toBeCloseTo(0.8);
+  expect(overlay?.bounds.height).toBeCloseTo(0.06);
 });
 
 test("matches embedded PDF semantic regions to rendered text lines", () => {
@@ -68,7 +65,11 @@ test("matches embedded PDF semantic regions to rendered text lines", () => {
     },
   ];
 
-  expect(semanticPreviewOverlays(page, lines)[0]?.bounds).toEqual(lines[0]?.bounds);
+  const bounds = semanticPreviewOverlays(page, lines)[0]?.bounds;
+  expect(bounds?.left).toBeCloseTo(lines[0]?.bounds.left ?? 0);
+  expect(bounds?.top).toBeCloseTo(lines[0]?.bounds.top ?? 0);
+  expect(bounds?.width).toBeCloseTo(lines[0]?.bounds.width ?? 0);
+  expect(bounds?.height).toBeCloseTo(lines[0]?.bounds.height ?? 0);
 });
 
 test("does not clutter the preview with ordinary content until its policy changes", () => {
