@@ -55,6 +55,17 @@ export function ReaderScreen() {
   const [settingsStatus, setSettingsStatus] = useState<string | undefined>();
   const settingsLoadStarted = useRef(false);
   const reader = useDurableSpeedReader({ initialDocument, persistence: readerPersistence });
+  const applyReaderSettings = useCallback((settings: ReaderSettings) => {
+    if (reader.settings.wordsPerMinute !== settings.wordsPerMinute) {
+      reader.setWordsPerMinute(settings.wordsPerMinute);
+    }
+    if (reader.settings.chunkSize !== settings.chunkSize) {
+      reader.setChunkSize(settings.chunkSize);
+    }
+    if (reader.settings.segmentation !== settings.segmentation) {
+      reader.setSegmentation(settings.segmentation);
+    }
+  }, [reader]);
   const toggle = useCallback(() => {
     if (reader.isPlaying) reader.pause();
     else reader.play();
@@ -110,18 +121,6 @@ export function ReaderScreen() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [reader, toggle]);
-
-  const applyReaderSettings = (settings: ReaderSettings) => {
-    if (reader.settings.wordsPerMinute !== settings.wordsPerMinute) {
-      reader.setWordsPerMinute(settings.wordsPerMinute);
-    }
-    if (reader.settings.chunkSize !== settings.chunkSize) {
-      reader.setChunkSize(settings.chunkSize);
-    }
-    if (reader.settings.segmentation !== settings.segmentation) {
-      reader.setSegmentation(settings.segmentation);
-    }
-  };
 
   const updateReaderSettings = (settings: ReaderSettings) => {
     const effective = settingsController?.setReaderSettings(settings).reader ?? settings;
