@@ -73,8 +73,8 @@ type SettingsBrowserModule = Readonly<{
 
 declare global {
   interface Window {
-    __speedreaderSettingsBrowser?: SettingsBrowserModule;
-    __speedreaderSettingsBrowserError?: string;
+    speedreaderSettingsBrowser?: SettingsBrowserModule;
+    speedreaderSettingsBrowserError?: string;
   }
 }
 
@@ -361,21 +361,21 @@ function loadSettingsBrowserModule(): Promise<SettingsBrowserModule> {
       return;
     }
 
-    if (window.__speedreaderSettingsBrowser !== undefined) {
-      resolve(window.__speedreaderSettingsBrowser);
+    if (window.speedreaderSettingsBrowser !== undefined) {
+      resolve(window.speedreaderSettingsBrowser);
       return;
     }
 
     const handleReady = () => {
       window.removeEventListener(SETTINGS_READY_EVENT, handleReady);
-      const module = window.__speedreaderSettingsBrowser;
+      const module = window.speedreaderSettingsBrowser;
       if (module !== undefined) {
         resolve(module);
         return;
       }
       reject(
         new Error(
-          window.__speedreaderSettingsBrowserError ??
+          window.speedreaderSettingsBrowserError ??
             "The browser settings foundation failed to initialize.",
         ),
       );
