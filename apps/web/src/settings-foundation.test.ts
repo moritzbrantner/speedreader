@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
   SPEEDREADER_SETTING_DEFINITIONS,
+  restoreUserScopeFromStorage,
   semanticRoleModesFromValues,
   snapshotFromValues,
   speedreaderSemanticRoles,
@@ -55,5 +56,45 @@ test("missing values preserve consumer-owned reader defaults", () => {
     wordsPerMinute: 300,
     chunkSize: 1,
     segmentation: "whitespace",
+  });
+});
+
+
+test("successful imports with recovery diagnostics stay authoritative", () => {
+  const legacyWrites: string[] = [];
+  const persistedSnapshots: string[] = [];
+  const canonicalSnapshot =
+    '{"schema_version":2,"scope":"user","overrides":{"future.option":{"type":"bool","value":true}}}';
+
+  const restore = restoreUserScopeFromStorage(
+    {
+      presentation: () => [],
+      effectiveValues: () => ({}),
+      set: (id) => {
+        legacyWrites.push(id);
+      },
+      reset: () => {},
+      importScope: () => ["UnknownSettingPreserved { id: future.option }"],
+      exportScope: () => canonicalSnapshot,
+      dispose: () => {},
+    },
+    {
+      wordsPerMinute: 420,
+      chunkSize: 2,
+      segmentation: "whitespace",
+    },
+    {
+      getItem: () => '{"schema_version":2,"scope":"user","overrides":{}}',
+      setItem: (_key, value) => {
+        persistedSnapshots.push(value);
+      },
+    },
+  );
+
+  expect(legacyWrites).toEqual([]);
+  expect(persistedSnapshots).toEqual([canonicalSnapshot]);
+  expect(restore).toEqual({
+    persistenceAvailable: true,
+    notice: "Stored settings were recovered by the shared settings foundation.",
   });
 });
