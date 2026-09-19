@@ -14,6 +14,12 @@ Cross-platform speed-reading product for web, mobile, and desktop.
 
 The application should keep its simplest mode permanently useful: plain text can be read locally without requiring OCR, a backend, accounts, or sync. More capable extraction and platform integrations are adapters around that core.
 
+### Settings authority
+
+Web and Tauri use the generated browser distribution from `moritzbrantner/settings`, pinned to browser-dist commit `1a268c485380eafb4e233a24c5803db4ff1f9ed0` (settings source `4aff7dc2dbfcae0e245269bd3fe50f6afb8e19e8`). The build vendors that immutable runtime into the static web output so Tauri stays offline-capable.
+
+The settings foundation is authoritative for durable reader preferences and semantic-role policy on those surfaces. Speedreader still owns what each setting means and its defaults. Existing `ReaderPreferences` persistence is retained as a migration/compatibility cache while mobile remains on the earlier persistence path; it is not the authority once the settings user-scope snapshot exists. Per-document semantic region corrections remain document/session state rather than global user settings.
+
 ## Browser PDF extraction
 
 The GitHub Pages build does not need an extraction server. PDFs with embedded text are inspected and cleaned entirely through the Rust/WASM extraction core. If a page has no embedded text, PDF.js renders only that page to an off-screen canvas and the worker runs `ocrs` against the pixels before handing the recognized text back to the canonical Rust document assembly path.
