@@ -32,6 +32,7 @@ export type SpeedReaderController = Readonly<{
   play: () => void;
   seek: (chunkIndex: number) => void;
   setChunkSize: (chunkSize: number) => void;
+  setSegmentation: (segmentation: ReaderSettings["segmentation"]) => void;
   setWordsPerMinute: (wordsPerMinute: number) => void;
 }>;
 
@@ -112,6 +113,10 @@ export function useSpeedReader(
     dispatch({ type: "set-chunk-size", chunkSize });
   }, [dispatch]);
 
+  const setSegmentation = useCallback((segmentation: ReaderSettings["segmentation"]) => {
+    dispatch({ type: "set-segmentation", segmentation });
+  }, [dispatch]);
+
   const setWordsPerMinute = useCallback((wordsPerMinute: number) => {
     dispatch({ type: "set-wpm", wordsPerMinute });
   }, [dispatch]);
@@ -126,6 +131,7 @@ export function useSpeedReader(
     play: () => dispatch({ type: "play" }),
     seek,
     setChunkSize,
+    setSegmentation,
     setWordsPerMinute,
   };
 }
@@ -215,6 +221,7 @@ export function useDurableSpeedReader(
     play: () => dispatch({ type: "play" }),
     seek: (chunkIndex) => dispatch({ type: "seek", chunkIndex }),
     setChunkSize: (chunkSize) => dispatch({ type: "set-chunk-size", chunkSize }),
+    setSegmentation: (segmentation) => dispatch({ type: "set-segmentation", segmentation }),
     setReadingText,
     setText,
     setWordsPerMinute: (wordsPerMinute) => dispatch({ type: "set-wpm", wordsPerMinute }),
