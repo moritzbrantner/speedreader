@@ -59,7 +59,6 @@ test("missing values preserve consumer-owned reader defaults", () => {
   });
 });
 
-
 test("successful imports with recovery diagnostics stay authoritative", () => {
   const legacyWrites: string[] = [];
   const persistedSnapshots: string[] = [];
