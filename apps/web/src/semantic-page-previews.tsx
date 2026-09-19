@@ -92,7 +92,7 @@ export function SemanticPagePreviews({
 
     void (async () => {
       try {
-        const pdfjs = (await import("pdfjs-dist/build/pdf.mjs")) as unknown as PdfJsModule;
+        const pdfjs = (await import("pdfjs-dist")) as unknown as PdfJsModule;
         const assetBase = new URL("./", globalThis.document.baseURI);
         pdfjs.GlobalWorkerOptions.workerSrc = new URL(
           "pdfjs/pdf.worker.mjs",
