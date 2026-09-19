@@ -306,7 +306,7 @@ function restoreUserScope(
   session: SettingsSession,
   legacyReaderSettings: ReaderSettings,
 ): Readonly<{ persistenceAvailable: boolean; notice?: string }> {
-  let storage: Storage;
+  let storage: Pick<Storage, "getItem" | "setItem">;
   try {
     storage = window.localStorage;
   } catch {
@@ -317,30 +317,79 @@ function restoreUserScope(
     };
   }
 
-  try {
-    const snapshot = storage.getItem(SETTINGS_STORAGE_KEY);
-    if (snapshot !== null) {
-      const diagnostics = session.importScope("user", snapshot);
-      if (diagnostics.length === 0) {
-        return { persistenceAvailable: true };
-      }
-      storage.removeItem(SETTINGS_STORAGE_KEY);
-    }
+  return restoreUserScopeFromStorage(session, legacyReaderSettings, storage);
+}
 
+export function restoreUserScopeFromStorage(
+  session: SettingsSession,
+  legacyReaderSettings: ReaderSettings,
+  storage: Pick<Storage, "getItem" | "setItem">,
+): Readonly<{ persistenceAvailable: boolean; notice?: string }> {
+  let snapshot: string | null;
+  try {
+    snapshot = storage.getItem(SETTINGS_STORAGE_KEY);
+  } catch {
     setReaderSettings(session, legacyReaderSettings);
-    storage.setItem(SETTINGS_STORAGE_KEY, session.exportScope("user"));
     return {
-      persistenceAvailable: true,
-      notice:
-        snapshot === null
-          ? "Existing reader preferences were migrated into the shared settings foundation."
-          : "Stored settings were incompatible and were rebuilt from the reader preferences.",
+      persistenceAvailable: false,
+      notice: "Settings are available for this session, but local persistence is unavailable.",
     };
+  }
+
+  if (snapshot === null) {
+    setReaderSettings(session, legacyReaderSettings);
+    try {
+      storage.setItem(SETTINGS_STORAGE_KEY, session.exportScope("user"));
+      return {
+        persistenceAvailable: true,
+        notice: "Existing reader preferences were migrated into the shared settings foundation.",
+      };
+    } catch {
+      return {
+        persistenceAvailable: false,
+        notice:
+          "Existing reader preferences are active for this session, but local persistence is unavailable.",
+      };
+    }
+  }
+
+  let diagnostics: readonly string[];
+  try {
+    diagnostics = session.importScope("user", snapshot);
   } catch {
     setReaderSettings(session, legacyReaderSettings);
     return {
       persistenceAvailable: false,
       notice: "Stored settings could not be restored; reader preferences are active for this session.",
+    };
+  }
+
+  if (diagnostics.length === 0) {
+    return { persistenceAvailable: true };
+  }
+
+  let canonicalSnapshot: string;
+  try {
+    canonicalSnapshot = session.exportScope("user");
+  } catch {
+    return {
+      persistenceAvailable: false,
+      notice:
+        "Stored settings were recovered for this session, but could not be canonicalized locally.",
+    };
+  }
+
+  try {
+    storage.setItem(SETTINGS_STORAGE_KEY, canonicalSnapshot);
+    return {
+      persistenceAvailable: true,
+      notice: "Stored settings were recovered by the shared settings foundation.",
+    };
+  } catch {
+    return {
+      persistenceAvailable: false,
+      notice:
+        "Stored settings were recovered for this session, but local persistence is unavailable.",
     };
   }
 }
