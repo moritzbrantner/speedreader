@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { type ReaderSettings } from "@moritzbrantner/speed-reading/core";
 import { readerFixture } from "@moritzbrantner/speed-reading/fixture";
 import { createReadingDocument } from "@moritzbrantner/speed-reading/persistence";
@@ -53,7 +53,6 @@ export function ReaderScreen() {
   const [semanticRegionOverrides, setSemanticRegionOverrides] = useState<SemanticRegionOverrides>({});
   const [settingsController, setSettingsController] = useState<SpeedreaderSettingsController | undefined>();
   const [settingsStatus, setSettingsStatus] = useState<string | undefined>();
-  const settingsLoadStarted = useRef(false);
   const reader = useDurableSpeedReader({ initialDocument, persistence: readerPersistence });
   const applyReaderSettings = useCallback((settings: ReaderSettings) => {
     if (reader.settings.wordsPerMinute !== settings.wordsPerMinute) {
@@ -76,8 +75,7 @@ export function ReaderScreen() {
   }, []);
 
   useEffect(() => {
-    if (!reader.restored || settingsLoadStarted.current) return;
-    settingsLoadStarted.current = true;
+    if (!reader.restored) return;
     let active = true;
 
     void createSpeedreaderSettingsController(reader.settings)
