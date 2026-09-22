@@ -277,9 +277,9 @@ export function ReaderScreen() {
           />
           <p className="reader-position">{`${reader.progress.chunkIndex} / ${reader.progress.totalChunks}`}</p>
           <div className="reader-controls">
-            <button type="button" onClick={() => reader.seek(reader.progress.chunkIndex - 1)}>Previous</button>
-            <button type="button" onClick={toggle}>{reader.isPlaying ? "Pause" : "Play"}</button>
-            <button type="button" onClick={() => reader.seek(reader.progress.chunkIndex + 1)}>Next</button>
+            <button className="reader-control-button" type="button" onClick={() => reader.seek(reader.progress.chunkIndex - 1)}>Previous</button>
+            <button className="reader-control-button reader-play-button" type="button" onClick={toggle}>{reader.isPlaying ? "Pause" : "Play"}</button>
+            <button className="reader-control-button" type="button" onClick={() => reader.seek(reader.progress.chunkIndex + 1)}>Next</button>
           </div>
         </div>
         <fieldset className="reader-settings">
@@ -359,7 +359,7 @@ export function ReaderScreen() {
                   onChange={(event) => setWebUrl(event.target.value)}
                 />
               </label>
-              <button type="submit" disabled={importingWebPage || webUrl.trim() === ""}>
+              <button className="source-action-button" type="submit" disabled={importingWebPage || webUrl.trim() === ""}>
                 Extract webpage
               </button>
             </form>
@@ -381,7 +381,7 @@ export function ReaderScreen() {
               />
             </label>
             {desktopAvailable ? (
-              <button type="button" onClick={() => void openNativeDocument()}>
+              <button className="source-action-button" type="button" onClick={() => void openNativeDocument()}>
                 Open local text or PDF
               </button>
             ) : null}
