@@ -30,7 +30,7 @@ A configured `NEXT_PUBLIC_EXTRACTION_URL` remains an explicit HTTP extraction ov
 
 ## Webpage extraction
 
-The web and Tauri reader can import a public URL. Speedreader first fetches and
+Web, Tauri, and mobile can import a public URL. Web/Tauri first fetch and
 parses accessible HTML in the browser, removes page chrome, scores article/main
 content candidates, and converts headings and text blocks into the same semantic
 `ReadingDocument` region contract used by PDF extraction. This means webpage
@@ -38,10 +38,13 @@ imports use the existing semantic filters and reading projection rather than a
 parallel reader path.
 
 Many public sites block direct browser reads through CORS. In that case the
-static web build falls back to Jina Reader by default. Obvious localhost and
-private-network addresses are never passed to the remote fallback. Set
-`NEXT_PUBLIC_WEB_READER_PREFIX` to a URL-prefix-compatible reader, or set it to
-an empty string to disable remote fallback.
+static web build falls back to Jina Reader by default. Mobile uses the same
+platform-neutral remote-reader contract because React Native does not expose the
+browser DOM parser. Obvious localhost, single-label, and private-network
+addresses are never passed to the remote fallback. Set
+`NEXT_PUBLIC_WEB_READER_PREFIX` on web/Tauri or
+`EXPO_PUBLIC_WEB_READER_PREFIX` on mobile to a URL-prefix-compatible reader;
+set the value to an empty string to disable remote extraction.
 
 ## Roadmap
 

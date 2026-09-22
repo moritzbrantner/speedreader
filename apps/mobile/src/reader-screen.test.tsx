@@ -14,6 +14,7 @@ import {
 } from "@moritzbrantner/speed-reading/core";
 
 import type { DocumentImportAdapter } from "./document-import";
+import type { WebPageImportAdapter } from "./webpage-import";
 
 const dimensions = { width: 390, height: 844 };
 
@@ -75,6 +76,12 @@ mock.module("@moritzbrantner/speed-reading/react", () => ({
 
 const { ReaderScreen } = await import("./reader-screen");
 
+const unusedWebPageImporter: WebPageImportAdapter = {
+  async importWebPage() {
+    throw new Error("Webpage import should not be used");
+  },
+};
+
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 test("exposes accessible reader controls and advances through shared chunks", async () => {
@@ -131,6 +138,69 @@ test("feeds imported text into reader state without exposing transport details t
   expect(byLabel(root, "Native")).toBeDefined();
   expect(root.findAll((node) => node.props.accessibilityLiveRegion === "polite")
     .some((node) => textContent(node).includes("Imported local.txt."))).toBeTrue();
+});
+
+test("imports a webpage into the shared reader and preserves semantic regions", async () => {
+  const importer: DocumentImportAdapter = {
+    async importDocument() {
+      return { status: "cancelled" };
+    },
+  };
+  const webPageImporter: WebPageImportAdapter = {
+    async importWebPage(url) {
+      expect(url).toBe("https://example.com/article");
+      return {
+        ok: true,
+        title: "Useful article",
+        url,
+        extractionMode: "remote-reader",
+        document: {
+          version: 1,
+          text: "Useful article\nRelevant paragraph",
+          diagnostics: [],
+          pages: [{
+            pageNumber: 1,
+            text: "Useful article\nRelevant paragraph",
+            provenance: { source: "web", url },
+            regions: [
+              {
+                sourceLineIndex: 0,
+                text: "Useful article",
+                role: "heading",
+                confidence: null,
+                evidence: [],
+                includeInReading: true,
+              },
+              {
+                sourceLineIndex: 1,
+                text: "Relevant paragraph",
+                role: "content",
+                confidence: null,
+                evidence: [],
+                includeInReading: true,
+              },
+            ],
+          }],
+        },
+      };
+    },
+  };
+  const renderer = renderReader(importer, webPageImporter);
+  const root = renderer.root;
+
+  await act(async () => {
+    byLabel(root, "Web address").props.onChangeText("https://example.com/article");
+  });
+  await act(async () => {
+    await byLabel(root, "Extract webpage").props.onPress();
+  });
+
+  expect(byLabel(root, "Source text").props.value)
+    .toBe("Useful article\nRelevant paragraph");
+  expect(byLabel(root, "Semantic filters")).toBeDefined();
+  expect(root.findAll((node) => node.props.accessibilityLiveRegion === "polite")
+    .some((node) => textContent(node).includes("Imported Useful article.")))
+    .toBeTrue();
 });
 
 test("keeps PDF semantic regions inspectable and projects role overrides into reading text", async () => {
@@ -192,10 +262,18 @@ test("keeps PDF semantic regions inspectable and projects role overrides into re
   expect(byLabel(root, "Footer policy include").props.accessibilityState).toEqual({ selected: true });
 });
 
-function renderReader(documentImporter: DocumentImportAdapter): ReactTestRenderer {
+function renderReader(
+  documentImporter: DocumentImportAdapter,
+  webPageImporter: WebPageImportAdapter = unusedWebPageImporter,
+): ReactTestRenderer {
   let renderer: ReactTestRenderer | undefined;
   act(() => {
-    renderer = create(<ReaderScreen documentImporter={documentImporter} />);
+    renderer = create(
+      <ReaderScreen
+        documentImporter={documentImporter}
+        webPageImporter={webPageImporter}
+      />,
+    );
   });
   if (renderer === undefined) throw new Error("Reader did not render");
   return renderer;
