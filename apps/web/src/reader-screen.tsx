@@ -330,49 +330,65 @@ export function ReaderScreen() {
           </label>
         </fieldset>
       </section>
-      {desktopAvailable ? (
-        <button type="button" onClick={() => void openNativeDocument()}>
-          Open local text or PDF
-        </button>
-      ) : null}
-      <section
-        aria-labelledby="web-import-heading"
-        style={{ border: "1px solid color-mix(in srgb, currentColor 24%, transparent)", borderRadius: 12, display: "grid", gap: 12, padding: 16 }}
-      >
-        <div>
-          <h2 id="web-import-heading" style={{ marginTop: 0 }}>Read a webpage</h2>
-          <p style={{ marginBottom: 0 }}>
-            Speedreader removes navigation and other page chrome, picks the strongest article/main-content region, and sends the resulting headings and text blocks through the same semantic reading pipeline as extracted documents.
-          </p>
+      <section aria-labelledby="source-options-heading" className="source-section">
+        <h2 id="source-options-heading">Choose a source</h2>
+        <div className="source-options" data-testid="source-options">
+          <section aria-labelledby="web-import-heading" className="source-option-card">
+            <div>
+              <h3 id="web-import-heading">Read a webpage</h3>
+              <p>
+                Paste a public web address. Speedreader extracts the main readable content and removes page chrome.
+              </p>
+            </div>
+            <form
+              aria-label="Import web page"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void importWebPage();
+              }}
+              className="source-option-form"
+            >
+              <label className="source-option-field">
+                Web address
+                <input
+                  type="text"
+                  inputMode="url"
+                  autoComplete="url"
+                  placeholder="https://example.com/article"
+                  value={webUrl}
+                  onChange={(event) => setWebUrl(event.target.value)}
+                />
+              </label>
+              <button type="submit" disabled={importingWebPage || webUrl.trim() === ""}>
+                Extract webpage
+              </button>
+            </form>
+          </section>
+          <section aria-labelledby="pdf-import-heading" className="source-option-card">
+            <div>
+              <h3 id="pdf-import-heading">Read a PDF</h3>
+              <p>
+                Select a PDF. Text extraction and OCR stay local before the document enters the reading pipeline.
+              </p>
+            </div>
+            <label className="source-option-field">
+              Import PDF
+              <input
+                type="file"
+                accept="application/pdf"
+                disabled={importingPdf}
+                onChange={(event) => void importPdf(event.target.files?.[0])}
+              />
+            </label>
+            {desktopAvailable ? (
+              <button type="button" onClick={() => void openNativeDocument()}>
+                Open local text or PDF
+              </button>
+            ) : null}
+          </section>
         </div>
-        <form
-          aria-label="Import web page"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void importWebPage();
-          }}
-          style={{ alignItems: "end", display: "flex", flexWrap: "wrap", gap: 12 }}
-        >
-          <label style={{ display: "grid", flex: "1 1 420px", gap: 8 }}>
-            Web address
-            <input
-              type="text"
-              inputMode="url"
-              autoComplete="url"
-              placeholder="https://example.com/article"
-              value={webUrl}
-              onChange={(event) => setWebUrl(event.target.value)}
-            />
-          </label>
-          <button type="submit" disabled={importingWebPage || webUrl.trim() === ""}>
-            Extract webpage
-          </button>
-        </form>
-        <small>
-          If browser security blocks a public site, Speedreader falls back to Jina Reader by default. Local/private-network URLs are never sent to that fallback; deployments can replace or disable it with NEXT_PUBLIC_WEB_READER_PREFIX.
-        </small>
       </section>
-      <label style={{ display: "grid", gap: 8 }}>
+      <label className="source-text">
         Source text
         <textarea
           value={reader.document.text}
@@ -386,10 +402,6 @@ export function ReaderScreen() {
           }}
           rows={8}
         />
-      </label>
-      <label>
-        Import PDF
-        <input type="file" accept="application/pdf" disabled={importingPdf} onChange={(event) => void importPdf(event.target.files?.[0])} />
       </label>
       {importingPdf ? <p role="status">Extracting PDF locally… Scanned pages may load OCR models on first use.</p> : null}
       {importingWebPage ? <p role="status">Fetching and cleaning readable webpage content…</p> : null}
