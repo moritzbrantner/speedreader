@@ -5,4 +5,67 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; background: Canvas; color: CanvasText; }
-button, input, textarea { font: inherit; }
+button, input, select, textarea { font: inherit; }
+
+.reader-shell {
+  display: grid;
+  gap: 2rem;
+  justify-items: center;
+  min-height: min(70dvh, 42rem);
+  padding-block: clamp(2rem, 8vh, 6rem);
+  text-align: center;
+}
+
+.reader-focus {
+  align-self: end;
+  display: grid;
+  gap: 1rem;
+  justify-items: center;
+  width: min(100%, 46rem);
+}
+
+.reader-chunk {
+  font-size: clamp(2.75rem, 9vw, 6rem);
+  line-height: 1.05;
+  min-height: 1.1em;
+}
+
+.reader-progress {
+  width: min(100%, 32rem);
+}
+
+.reader-position {
+  margin: 0;
+}
+
+.reader-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.reader-settings {
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 0.75rem;
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 1rem 1.25rem 1.25rem;
+  width: min(100%, 34rem);
+}
+
+.reader-settings legend {
+  padding-inline: 0.5rem;
+}
+
+.reader-setting {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+}
+
+.reader-setting > input[type="range"],
+.reader-setting > select {
+  width: min(100%, 24rem);
+}
