@@ -60,7 +60,9 @@ input[type="file"]::file-selector-button {
 .reader-chunk {
   font-size: clamp(2.75rem, 9vw, 6rem);
   line-height: 1.05;
+  max-width: 100%;
   min-height: 1.1em;
+  overflow-wrap: anywhere;
 }
 
 .reader-progress {
