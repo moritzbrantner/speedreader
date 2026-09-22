@@ -38,24 +38,43 @@ test("reads pasted plain text without contacting the extraction service", async 
   expect(extractionRequests).toBe(0);
 });
 
-test("centers the reader focus and keeps settings underneath it", async ({ page }) => {
+test("keeps the centered reader above side-by-side source choices", async ({ page }) => {
   await page.goto("/");
 
   const reader = page.getByRole("region", { name: "Reader" });
   const focus = reader.getByTestId("reader-focus");
   const settings = reader.getByRole("group", { name: "Reading settings" });
+  const sources = page.getByTestId("source-options");
+  const webSource = page.getByRole("region", { name: "Read a webpage" });
+  const pdfSource = page.getByRole("region", { name: "Read a PDF" });
   const viewport = page.viewportSize();
   const focusBox = await focus.boundingBox();
   const settingsBox = await settings.boundingBox();
+  const sourcesBox = await sources.boundingBox();
+  const webBox = await webSource.boundingBox();
+  const pdfBox = await pdfSource.boundingBox();
 
   expect(viewport).not.toBeNull();
   expect(focusBox).not.toBeNull();
   expect(settingsBox).not.toBeNull();
-  if (viewport === null || focusBox === null || settingsBox === null) return;
+  expect(sourcesBox).not.toBeNull();
+  expect(webBox).not.toBeNull();
+  expect(pdfBox).not.toBeNull();
+  if (
+    viewport === null ||
+    focusBox === null ||
+    settingsBox === null ||
+    sourcesBox === null ||
+    webBox === null ||
+    pdfBox === null
+  ) return;
 
   const focusCenter = focusBox.x + focusBox.width / 2;
   expect(Math.abs(focusCenter - viewport.width / 2)).toBeLessThan(24);
   expect(settingsBox.y).toBeGreaterThanOrEqual(focusBox.y + focusBox.height);
+  expect(sourcesBox.y).toBeGreaterThanOrEqual(settingsBox.y + settingsBox.height);
+  expect(Math.abs(webBox.y - pdfBox.y)).toBeLessThan(4);
+  expect(webBox.x + webBox.width).toBeLessThanOrEqual(pdfBox.x);
 });
 
 test("feeds a mocked PDF reading document into the reader", async ({ page }) => {
