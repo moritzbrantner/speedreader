@@ -264,49 +264,131 @@ export function ReaderScreen() {
         <h1>Speedreader</h1>
         <p>Paste text, import a PDF, or extract the readable content from a web address. PDF OCR stays local; webpage import prefers local parsing and uses a remote reader only when a public site blocks browser access.</p>
       </header>
-      {desktopAvailable ? (
-        <button type="button" onClick={() => void openNativeDocument()}>
-          Open local text or PDF
-        </button>
-      ) : null}
-      <section
-        aria-labelledby="web-import-heading"
-        style={{ border: "1px solid color-mix(in srgb, currentColor 24%, transparent)", borderRadius: 12, display: "grid", gap: 12, padding: 16 }}
-      >
-        <div>
-          <h2 id="web-import-heading" style={{ marginTop: 0 }}>Read a webpage</h2>
-          <p style={{ marginBottom: 0 }}>
-            Speedreader removes navigation and other page chrome, picks the strongest article/main-content region, and sends the resulting headings and text blocks through the same semantic reading pipeline as extracted documents.
-          </p>
+      <section aria-label="Reader" className="reader-shell">
+        <div className="reader-focus" data-testid="reader-focus">
+          <output aria-live="polite" className="reader-chunk">
+            {reader.currentChunk?.text ?? "Finished"}
+          </output>
+          <progress
+            aria-label="Reading progress"
+            className="reader-progress"
+            value={reader.progress.chunkIndex}
+            max={reader.progress.totalChunks || 1}
+          />
+          <p className="reader-position">{`${reader.progress.chunkIndex} / ${reader.progress.totalChunks}`}</p>
+          <div className="reader-controls">
+            <button className="reader-control-button" type="button" onClick={() => reader.seek(reader.progress.chunkIndex - 1)}>Previous</button>
+            <button className="reader-control-button reader-play-button" type="button" onClick={toggle}>{reader.isPlaying ? "Pause" : "Play"}</button>
+            <button className="reader-control-button" type="button" onClick={() => reader.seek(reader.progress.chunkIndex + 1)}>Next</button>
+          </div>
         </div>
-        <form
-          aria-label="Import web page"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void importWebPage();
-          }}
-          style={{ alignItems: "end", display: "flex", flexWrap: "wrap", gap: 12 }}
-        >
-          <label style={{ display: "grid", flex: "1 1 420px", gap: 8 }}>
-            Web address
+        <fieldset className="reader-settings">
+          <legend>Reading settings</legend>
+          <label className="reader-setting">
+            <span>Words per minute {reader.settings.wordsPerMinute}</span>
             <input
-              type="text"
-              inputMode="url"
-              autoComplete="url"
-              placeholder="https://example.com/article"
-              value={webUrl}
-              onChange={(event) => setWebUrl(event.target.value)}
+              type="range"
+              min="60"
+              max="1200"
+              step="10"
+              value={reader.settings.wordsPerMinute}
+              onChange={(event) =>
+                updateReaderSettings({
+                  ...reader.settings,
+                  wordsPerMinute: Number(event.target.value),
+                })}
             />
           </label>
-          <button type="submit" disabled={importingWebPage || webUrl.trim() === ""}>
-            Extract webpage
-          </button>
-        </form>
-        <small>
-          If browser security blocks a public site, Speedreader falls back to Jina Reader by default. Local/private-network URLs are never sent to that fallback; deployments can replace or disable it with NEXT_PUBLIC_WEB_READER_PREFIX.
-        </small>
+          <label className="reader-setting">
+            <span>Words per chunk</span>
+            <select
+              value={reader.settings.chunkSize}
+              onChange={(event) =>
+                updateReaderSettings({
+                  ...reader.settings,
+                  chunkSize: Number(event.target.value),
+                })}
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </label>
+          <label className="reader-setting">
+            <span>Text segmentation</span>
+            <select
+              value={reader.settings.segmentation}
+              onChange={(event) =>
+                updateReaderSettings({
+                  ...reader.settings,
+                  segmentation: event.target.value as ReaderSettings["segmentation"],
+                })}
+            >
+              <option value="whitespace">Whitespace</option>
+              <option value="punctuation">Punctuation-aware</option>
+            </select>
+          </label>
+        </fieldset>
       </section>
-      <label style={{ display: "grid", gap: 8 }}>
+      <section aria-labelledby="source-options-heading" className="source-section">
+        <h2 id="source-options-heading">Choose a source</h2>
+        <div className="source-options" data-testid="source-options">
+          <section aria-labelledby="web-import-heading" className="source-option-card">
+            <div>
+              <h3 id="web-import-heading">Read a webpage</h3>
+              <p>
+                Paste a public web address. Speedreader extracts the main readable content and removes page chrome.
+              </p>
+            </div>
+            <form
+              aria-label="Import web page"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void importWebPage();
+              }}
+              className="source-option-form"
+            >
+              <label className="source-option-field">
+                Web address
+                <input
+                  type="text"
+                  inputMode="url"
+                  autoComplete="url"
+                  placeholder="https://example.com/article"
+                  value={webUrl}
+                  onChange={(event) => setWebUrl(event.target.value)}
+                />
+              </label>
+              <button className="source-action-button" type="submit" disabled={importingWebPage || webUrl.trim() === ""}>
+                Extract webpage
+              </button>
+            </form>
+          </section>
+          <section aria-labelledby="pdf-import-heading" className="source-option-card">
+            <div>
+              <h3 id="pdf-import-heading">Read a PDF</h3>
+              <p>
+                Select a PDF. Text extraction and OCR stay local before the document enters the reading pipeline.
+              </p>
+            </div>
+            <label className="source-option-field">
+              Import PDF
+              <input
+                type="file"
+                accept="application/pdf"
+                disabled={importingPdf}
+                onChange={(event) => void importPdf(event.target.files?.[0])}
+              />
+            </label>
+            {desktopAvailable ? (
+              <button className="source-action-button" type="button" onClick={() => void openNativeDocument()}>
+                Open local text or PDF
+              </button>
+            ) : null}
+          </section>
+        </div>
+      </section>
+      <label className="source-text">
         Source text
         <textarea
           value={reader.document.text}
@@ -320,10 +402,6 @@ export function ReaderScreen() {
           }}
           rows={8}
         />
-      </label>
-      <label>
-        Import PDF
-        <input type="file" accept="application/pdf" disabled={importingPdf} onChange={(event) => void importPdf(event.target.files?.[0])} />
       </label>
       {importingPdf ? <p role="status">Extracting PDF locally… Scanned pages may load OCR models on first use.</p> : null}
       {importingWebPage ? <p role="status">Fetching and cleaning readable webpage content…</p> : null}
@@ -431,62 +509,6 @@ export function ReaderScreen() {
           ) : null}
         </section>
       ) : null}
-      <section aria-label="Reader" style={{ display: "grid", gap: 16, textAlign: "center" }}>
-        <output aria-live="polite" style={{ fontSize: "clamp(2rem, 8vw, 5rem)", minHeight: "1.2em" }}>
-          {reader.currentChunk?.text ?? "Finished"}
-        </output>
-        <progress value={reader.progress.chunkIndex} max={reader.progress.totalChunks || 1} />
-        <p>{`${reader.progress.chunkIndex} / ${reader.progress.totalChunks}`}</p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
-          <button type="button" onClick={() => reader.seek(reader.progress.chunkIndex - 1)}>Previous</button>
-          <button type="button" onClick={toggle}>{reader.isPlaying ? "Pause" : "Play"}</button>
-          <button type="button" onClick={() => reader.seek(reader.progress.chunkIndex + 1)}>Next</button>
-        </div>
-        <label>
-          Words per minute {reader.settings.wordsPerMinute}
-          <input
-            type="range"
-            min="60"
-            max="1200"
-            step="10"
-            value={reader.settings.wordsPerMinute}
-            onChange={(event) =>
-              updateReaderSettings({
-                ...reader.settings,
-                wordsPerMinute: Number(event.target.value),
-              })}
-          />
-        </label>
-        <label>
-          Words per chunk
-          <select
-            value={reader.settings.chunkSize}
-            onChange={(event) =>
-              updateReaderSettings({
-                ...reader.settings,
-                chunkSize: Number(event.target.value),
-              })}
-          >
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((size) => (
-              <option key={size} value={size}>{size}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Text segmentation
-          <select
-            value={reader.settings.segmentation}
-            onChange={(event) =>
-              updateReaderSettings({
-                ...reader.settings,
-                segmentation: event.target.value as ReaderSettings["segmentation"],
-              })}
-          >
-            <option value="whitespace">Whitespace</option>
-            <option value="punctuation">Punctuation-aware</option>
-          </select>
-        </label>
-      </section>
     </main>
   );
 }
