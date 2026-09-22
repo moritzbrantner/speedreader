@@ -100,11 +100,11 @@ export function createWebPageExtractionResult(
   target: URL,
   extractionMode: WebPageExtractionMode,
 ): WebPageExtractionResult {
-  const defaultText = parsed.regions
+  const regions = limitRegions(parsed.regions, maximumReadingCharacters);
+  const defaultText = regions
     .filter((region) => region.includeInReading)
     .map((region) => region.text)
     .join("\n")
-    .slice(0, maximumReadingCharacters)
     .trim();
   const document: ReadingDocument = {
     version: 1,
@@ -112,7 +112,7 @@ export function createWebPageExtractionResult(
     pages: [
       {
         pageNumber: 1,
-        text: parsed.regions.map((region) => region.text).join("\n"),
+        text: regions.map((region) => region.text).join("\n"),
         provenance: {
           source: "web",
           url: target.href,
@@ -120,9 +120,9 @@ export function createWebPageExtractionResult(
         },
         readingOrder: {
           strategy: "sourceOrder",
-          regionIndices: parsed.regions.map((_, index) => index),
+          regionIndices: regions.map((_, index) => index),
         },
-        regions: parsed.regions,
+        regions,
       },
     ],
     diagnostics: extractionMode === "remote-reader"
@@ -277,6 +277,34 @@ export function isSafeForRemoteReader(url: URL): boolean {
   if (octets[0] === 192 && octets[1] === 168) return false;
   if (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) return false;
   return true;
+}
+
+function limitRegions(
+  regions: readonly DocumentTextRegion[],
+  maximumCharacters: number,
+): readonly DocumentTextRegion[] {
+  const limited: DocumentTextRegion[] = [];
+  let usedCharacters = 0;
+
+  for (const region of regions) {
+    const separatorLength = limited.length === 0 ? 0 : 1;
+    const remaining = maximumCharacters - usedCharacters - separatorLength;
+    if (remaining <= 0) break;
+
+    if (region.text.length <= remaining) {
+      limited.push(region);
+      usedCharacters += separatorLength + region.text.length;
+      continue;
+    }
+
+    const text = region.text.slice(0, remaining).trimEnd();
+    if (text !== "") {
+      limited.push({ ...region, text });
+    }
+    break;
+  }
+
+  return limited;
 }
 
 function createRegion(

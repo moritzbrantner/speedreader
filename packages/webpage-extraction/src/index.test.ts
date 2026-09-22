@@ -72,3 +72,30 @@ test("keeps local, private, and single-label hosts out of remote extraction", as
     message: "Local and private-network addresses are never sent to the remote reader fallback.",
   });
 });
+
+
+test("keeps capped document text and semantic regions consistent", async () => {
+  const oversized = "x".repeat(600_000);
+  const result = await extractRemoteWebPageDocument("https://example.com/large", {
+    fetchImplementation: async () => new Response([
+      "Title: Large article",
+      "",
+      "Markdown Content:",
+      oversized,
+    ].join("\n")),
+    remoteReaderPrefix: "https://reader.example/",
+  });
+
+  expect(result.ok).toBeTrue();
+  if (!result.ok) return;
+
+  const regions = result.document.pages[0]?.regions ?? [];
+  const projected = regions
+    .filter((region) => region.includeInReading)
+    .map((region) => region.text)
+    .join("\n");
+
+  expect(result.document.text).toBe(projected);
+  expect(result.document.text.length).toBeLessThanOrEqual(500_000);
+  expect(result.document.pages[0]?.text.length).toBeLessThanOrEqual(500_000);
+});
