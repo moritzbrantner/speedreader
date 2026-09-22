@@ -264,6 +264,72 @@ export function ReaderScreen() {
         <h1>Speedreader</h1>
         <p>Paste text, import a PDF, or extract the readable content from a web address. PDF OCR stays local; webpage import prefers local parsing and uses a remote reader only when a public site blocks browser access.</p>
       </header>
+      <section aria-label="Reader" className="reader-shell">
+        <div className="reader-focus" data-testid="reader-focus">
+          <output aria-live="polite" className="reader-chunk">
+            {reader.currentChunk?.text ?? "Finished"}
+          </output>
+          <progress
+            aria-label="Reading progress"
+            className="reader-progress"
+            value={reader.progress.chunkIndex}
+            max={reader.progress.totalChunks || 1}
+          />
+          <p className="reader-position">{`${reader.progress.chunkIndex} / ${reader.progress.totalChunks}`}</p>
+          <div className="reader-controls">
+            <button type="button" onClick={() => reader.seek(reader.progress.chunkIndex - 1)}>Previous</button>
+            <button type="button" onClick={toggle}>{reader.isPlaying ? "Pause" : "Play"}</button>
+            <button type="button" onClick={() => reader.seek(reader.progress.chunkIndex + 1)}>Next</button>
+          </div>
+        </div>
+        <fieldset className="reader-settings">
+          <legend>Reading settings</legend>
+          <label className="reader-setting">
+            <span>Words per minute {reader.settings.wordsPerMinute}</span>
+            <input
+              type="range"
+              min="60"
+              max="1200"
+              step="10"
+              value={reader.settings.wordsPerMinute}
+              onChange={(event) =>
+                updateReaderSettings({
+                  ...reader.settings,
+                  wordsPerMinute: Number(event.target.value),
+                })}
+            />
+          </label>
+          <label className="reader-setting">
+            <span>Words per chunk</span>
+            <select
+              value={reader.settings.chunkSize}
+              onChange={(event) =>
+                updateReaderSettings({
+                  ...reader.settings,
+                  chunkSize: Number(event.target.value),
+                })}
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </label>
+          <label className="reader-setting">
+            <span>Text segmentation</span>
+            <select
+              value={reader.settings.segmentation}
+              onChange={(event) =>
+                updateReaderSettings({
+                  ...reader.settings,
+                  segmentation: event.target.value as ReaderSettings["segmentation"],
+                })}
+            >
+              <option value="whitespace">Whitespace</option>
+              <option value="punctuation">Punctuation-aware</option>
+            </select>
+          </label>
+        </fieldset>
+      </section>
       {desktopAvailable ? (
         <button type="button" onClick={() => void openNativeDocument()}>
           Open local text or PDF
@@ -431,62 +497,6 @@ export function ReaderScreen() {
           ) : null}
         </section>
       ) : null}
-      <section aria-label="Reader" style={{ display: "grid", gap: 16, textAlign: "center" }}>
-        <output aria-live="polite" style={{ fontSize: "clamp(2rem, 8vw, 5rem)", minHeight: "1.2em" }}>
-          {reader.currentChunk?.text ?? "Finished"}
-        </output>
-        <progress value={reader.progress.chunkIndex} max={reader.progress.totalChunks || 1} />
-        <p>{`${reader.progress.chunkIndex} / ${reader.progress.totalChunks}`}</p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
-          <button type="button" onClick={() => reader.seek(reader.progress.chunkIndex - 1)}>Previous</button>
-          <button type="button" onClick={toggle}>{reader.isPlaying ? "Pause" : "Play"}</button>
-          <button type="button" onClick={() => reader.seek(reader.progress.chunkIndex + 1)}>Next</button>
-        </div>
-        <label>
-          Words per minute {reader.settings.wordsPerMinute}
-          <input
-            type="range"
-            min="60"
-            max="1200"
-            step="10"
-            value={reader.settings.wordsPerMinute}
-            onChange={(event) =>
-              updateReaderSettings({
-                ...reader.settings,
-                wordsPerMinute: Number(event.target.value),
-              })}
-          />
-        </label>
-        <label>
-          Words per chunk
-          <select
-            value={reader.settings.chunkSize}
-            onChange={(event) =>
-              updateReaderSettings({
-                ...reader.settings,
-                chunkSize: Number(event.target.value),
-              })}
-          >
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((size) => (
-              <option key={size} value={size}>{size}</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Text segmentation
-          <select
-            value={reader.settings.segmentation}
-            onChange={(event) =>
-              updateReaderSettings({
-                ...reader.settings,
-                segmentation: event.target.value as ReaderSettings["segmentation"],
-              })}
-          >
-            <option value="whitespace">Whitespace</option>
-            <option value="punctuation">Punctuation-aware</option>
-          </select>
-        </label>
-      </section>
     </main>
   );
 }
