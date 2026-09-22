@@ -38,6 +38,26 @@ test("reads pasted plain text without contacting the extraction service", async 
   expect(extractionRequests).toBe(0);
 });
 
+test("centers the reader focus and keeps settings underneath it", async ({ page }) => {
+  await page.goto("/");
+
+  const reader = page.getByRole("region", { name: "Reader" });
+  const focus = reader.getByTestId("reader-focus");
+  const settings = reader.getByRole("group", { name: "Reading settings" });
+  const viewport = page.viewportSize();
+  const focusBox = await focus.boundingBox();
+  const settingsBox = await settings.boundingBox();
+
+  expect(viewport).not.toBeNull();
+  expect(focusBox).not.toBeNull();
+  expect(settingsBox).not.toBeNull();
+  if (viewport === null || focusBox === null || settingsBox === null) return;
+
+  const focusCenter = focusBox.x + focusBox.width / 2;
+  expect(Math.abs(focusCenter - viewport.width / 2)).toBeLessThan(24);
+  expect(settingsBox.y).toBeGreaterThanOrEqual(focusBox.y + focusBox.height);
+});
+
 test("feeds a mocked PDF reading document into the reader", async ({ page }) => {
   const extractedText = "Extracted words enter reader";
   await page.route(extractionPath, async (route) => {
