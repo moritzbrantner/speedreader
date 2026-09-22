@@ -248,13 +248,13 @@ export function isSafeForRemoteReader(url: URL): boolean {
   ) {
     return false;
   }
-  if (
-    hostname === "::1"
-    || hostname.startsWith("fc")
-    || hostname.startsWith("fd")
-    || hostname.startsWith("fe80:")
-  ) {
-    return false;
+  if (hostname.includes(":")) {
+    return !(
+      hostname === "::1"
+      || hostname.startsWith("fc")
+      || hostname.startsWith("fd")
+      || hostname.startsWith("fe80:")
+    );
   }
   const octets = hostname.split(".").map(Number);
   if (
