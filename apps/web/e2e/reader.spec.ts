@@ -53,6 +53,10 @@ test("keeps the centered reader above side-by-side source choices", async ({ pag
   const sourcesBox = await sources.boundingBox();
   const webBox = await webSource.boundingBox();
   const pdfBox = await pdfSource.boundingBox();
+  const previousBox = await reader.getByRole("button", { name: "Previous" }).boundingBox();
+  const playBox = await reader.getByRole("button", { name: "Play" }).boundingBox();
+  const nextBox = await reader.getByRole("button", { name: "Next" }).boundingBox();
+  const webActionBox = await page.getByRole("button", { name: "Extract webpage" }).boundingBox();
 
   expect(viewport).not.toBeNull();
   expect(focusBox).not.toBeNull();
@@ -60,13 +64,21 @@ test("keeps the centered reader above side-by-side source choices", async ({ pag
   expect(sourcesBox).not.toBeNull();
   expect(webBox).not.toBeNull();
   expect(pdfBox).not.toBeNull();
+  expect(previousBox).not.toBeNull();
+  expect(playBox).not.toBeNull();
+  expect(nextBox).not.toBeNull();
+  expect(webActionBox).not.toBeNull();
   if (
     viewport === null ||
     focusBox === null ||
     settingsBox === null ||
     sourcesBox === null ||
     webBox === null ||
-    pdfBox === null
+    pdfBox === null ||
+    previousBox === null ||
+    playBox === null ||
+    nextBox === null ||
+    webActionBox === null
   ) return;
 
   const focusCenter = focusBox.x + focusBox.width / 2;
@@ -75,6 +87,12 @@ test("keeps the centered reader above side-by-side source choices", async ({ pag
   expect(sourcesBox.y).toBeGreaterThanOrEqual(settingsBox.y + settingsBox.height);
   expect(Math.abs(webBox.y - pdfBox.y)).toBeLessThan(4);
   expect(webBox.x + webBox.width).toBeLessThanOrEqual(pdfBox.x);
+  expect(Math.abs(previousBox.y - playBox.y)).toBeLessThan(4);
+  expect(Math.abs(playBox.y - nextBox.y)).toBeLessThan(4);
+  expect(previousBox.width).toBeLessThan(160);
+  expect(playBox.width).toBeLessThan(160);
+  expect(nextBox.width).toBeLessThan(160);
+  expect(webActionBox.width).toBeLessThan(webBox.width * 0.75);
 });
 
 test("feeds a mocked PDF reading document into the reader", async ({ page }) => {
