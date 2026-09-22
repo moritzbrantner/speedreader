@@ -17,7 +17,7 @@ describe("persisted reader contracts", () => {
     const document = createReadingDocument({
       title: "Notes",
       text: "one two three",
-      source: "plain-text",
+      source: "web",
       updatedAt: timestamp,
     });
     const session = transitionReadingSession(

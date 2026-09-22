@@ -28,6 +28,21 @@ PDF bytes and rendered page pixels stay in the browser. The OCR detection and re
 
 A configured `NEXT_PUBLIC_EXTRACTION_URL` remains an explicit HTTP extraction override. This keeps hosted/server deployments and the existing service contract available without making GitHub Pages depend on a backend.
 
+## Webpage extraction
+
+The web and Tauri reader can import a public URL. Speedreader first fetches and
+parses accessible HTML in the browser, removes page chrome, scores article/main
+content candidates, and converts headings and text blocks into the same semantic
+`ReadingDocument` region contract used by PDF extraction. This means webpage
+imports use the existing semantic filters and reading projection rather than a
+parallel reader path.
+
+Many public sites block direct browser reads through CORS. In that case the
+static web build falls back to Jina Reader by default. Obvious localhost and
+private-network addresses are never passed to the remote fallback. Set
+`NEXT_PUBLIC_WEB_READER_PREFIX` to a URL-prefix-compatible reader, or set it to
+an empty string to disable remote fallback.
+
 ## Roadmap
 
 1. [A0 — Scaffold monorepo and prove the shared reader](https://github.com/moritzbrantner/speedreader/issues/1)

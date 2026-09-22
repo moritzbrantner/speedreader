@@ -99,3 +99,42 @@ test("restores plain-text preferences and progress after a browser restart", asy
   await expect(reader.getByRole("slider")).toHaveValue("420");
   await expect(reader.getByText("2 / 4", { exact: true })).toBeVisible();
 });
+
+
+test("extracts the readable article from a pasted webpage URL", async ({ page }) => {
+  const articleUrl = "https://news.example/article";
+  await page.route(articleUrl, async (route) => {
+    await route.fulfill({
+      body: [
+        "<!doctype html><html><head><title>Readable article</title></head><body>",
+        "<header>Site chrome</header><nav>Navigation noise</nav>",
+        "<main><article><h1>Readable article</h1>",
+        "<p>The first relevant paragraph explains the subject.</p>",
+        "<aside>Related-story noise</aside>",
+        "<p>The second relevant paragraph finishes it.</p>",
+        "</article></main><footer>Footer noise</footer></body></html>",
+      ].join(""),
+      headers: {
+        "access-control-allow-origin": "*",
+        "content-type": "text/html; charset=utf-8",
+      },
+      status: 200,
+    });
+  });
+
+  await page.goto("/");
+  await page.getByLabel("Web address").fill(articleUrl);
+  await page.getByRole("button", { name: "Extract webpage" }).click();
+
+  await expect(
+    page.getByRole("status").filter({
+      hasText: "Imported Readable article from news.example",
+    }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Source text")).toHaveValue(
+    "Readable article\nThe first relevant paragraph explains the subject.\nThe second relevant paragraph finishes it.",
+  );
+
+  const reader = page.getByRole("region", { name: "Reader" });
+  await expect(reader.getByRole("status")).toHaveText("Readable");
+});
