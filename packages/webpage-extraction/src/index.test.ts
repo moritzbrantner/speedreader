@@ -53,6 +53,9 @@ test("keeps local, private, and single-label hosts out of remote extraction", as
   expect(isSafeForRemoteReader(new URL("http://192.168.1.2/private"))).toBeFalse();
   expect(isSafeForRemoteReader(new URL("http://intranet/private"))).toBeFalse();
   expect(isSafeForRemoteReader(new URL("http://service.internal/private"))).toBeFalse();
+  expect(isSafeForRemoteReader(new URL("http://localhost./private"))).toBeFalse();
+  expect(isSafeForRemoteReader(new URL("http://intranet./private"))).toBeFalse();
+  expect(isSafeForRemoteReader(new URL("http://[::ffff:127.0.0.1]/private"))).toBeFalse();
   expect(isSafeForRemoteReader(new URL("https://fctech.example/article"))).toBeTrue();
 
   let requests = 0;

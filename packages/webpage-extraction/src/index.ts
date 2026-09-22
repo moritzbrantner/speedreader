@@ -238,19 +238,26 @@ export function normalizeWebUrl(input: string): URL | undefined {
 }
 
 export function isSafeForRemoteReader(url: URL): boolean {
-  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const hostname = url.hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.+$/, "");
   if (
     hostname === "localhost"
     || hostname.endsWith(".localhost")
     || hostname.endsWith(".local")
     || hostname.endsWith(".internal")
     || hostname.endsWith(".lan")
+    || hostname.endsWith(".home")
+    || hostname.endsWith(".home.arpa")
   ) {
     return false;
   }
   if (hostname.includes(":")) {
     return !(
-      hostname === "::1"
+      hostname === "::"
+      || hostname === "::1"
+      || hostname.startsWith("::ffff:")
       || hostname.startsWith("fc")
       || hostname.startsWith("fd")
       || hostname.startsWith("fe80:")
