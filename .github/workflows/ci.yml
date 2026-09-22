@@ -5,19 +5,67 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
+  browser-runtime:
+    name: Build or reuse browser runtime
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    uses: moritzbrantner/reusable-workflows/.github/workflows/build-artifact.yml@c3ffc400a479e8574dc299b81fe9ce44f71dd53f
+    with:
+      source_sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      artifact_key: speedreader-browser-runtime-v1
+      bun_version: "1.4.0"
+      rust_toolchain: "1.98.1"
+      rust_targets: wasm32-unknown-unknown
+      cache_bun: true
+      bun_cache_dependency_path: bun.lock
+      cache_cargo: true
+      cargo_cache_dependency_path: Cargo.lock
+      cargo_tool_cache_key: rust-1.98.1-wasm-bindgen-cli-0.2.127
+      use_environment_v1: false
+      setup_command: |
+        bun install --frozen-lockfile
+        cargo install wasm-bindgen-cli --version 0.2.127 --locked
+      build_command: |
+        bun run wasm:build
+        rm -rf .artifacts/browser-runtime
+        mkdir -p .artifacts/browser-runtime
+        cp -R apps/web/public/wasm .artifacts/browser-runtime/wasm
+        cp -R apps/web/public/pdfjs .artifacts/browser-runtime/pdfjs
+      artifact_paths: .artifacts/browser-runtime
+      reuse_across_runs: true
+      expected_consumers: 2
+      artifact_retention_days: 7
+      timeout_minutes: 30
+
   verify:
+    name: Verify against prepared browser runtime
+    needs: browser-runtime
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: ${{ needs.browser-runtime.outputs.source_sha }}
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.0
+
       - uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: 1.98.1
           targets: wasm32-unknown-unknown
-      - name: Install wasm-bindgen CLI
-        run: cargo install wasm-bindgen-cli --version 0.2.127 --locked
+
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update
@@ -31,5 +79,30 @@ jobs:
             libssl-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev
-      - run: bun install --frozen-lockfile
-      - run: bun run ci
+
+      - name: Install workspace dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Consume verified browser runtime
+        id: browser-runtime
+        uses: moritzbrantner/reusable-workflows/.github/actions/consume-build-artifact@c3ffc400a479e8574dc299b81fe9ce44f71dd53f
+        with:
+          producer_run_id: ${{ needs.browser-runtime.outputs.producer_run_id }}
+          receipt_artifact_name: ${{ needs.browser-runtime.outputs.receipt_artifact_name }}
+          artifact_name: ${{ needs.browser-runtime.outputs.artifact_name }}
+          artifact_digest: ${{ needs.browser-runtime.outputs.artifact_digest }}
+          source_sha: ${{ needs.browser-runtime.outputs.source_sha }}
+          artifact_key: ${{ needs.browser-runtime.outputs.artifact_key }}
+          identity_digest: ${{ needs.browser-runtime.outputs.identity_digest }}
+          destination_path: .artifacts/verified-browser-runtime
+          github_token: ${{ github.token }}
+
+      - name: Stage browser runtime
+        run: |
+          rm -rf apps/web/public/wasm apps/web/public/pdfjs
+          mkdir -p apps/web/public
+          cp -R .artifacts/verified-browser-runtime/wasm apps/web/public/wasm
+          cp -R .artifacts/verified-browser-runtime/pdfjs apps/web/public/pdfjs
+
+      - name: Run CI without recompiling browser runtime
+        run: bun run ci:prepared
