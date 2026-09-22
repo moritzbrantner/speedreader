@@ -12,6 +12,7 @@ import {
   type ExtractionResult,
   type ReadingDocument,
 } from "./extraction";
+import { extractWebPageDocument } from "./webpage-extraction";
 import {
   isDesktopShell,
   openDesktopDocument,
@@ -46,6 +47,9 @@ export function ReaderScreen() {
   const [extraction, setExtraction] = useState<ExtractionResult | undefined>();
   const [importError, setImportError] = useState<string | undefined>();
   const [importingPdf, setImportingPdf] = useState(false);
+  const [webUrl, setWebUrl] = useState("");
+  const [importingWebPage, setImportingWebPage] = useState(false);
+  const [webImportStatus, setWebImportStatus] = useState<string | undefined>();
   const [previewPdf, setPreviewPdf] = useState<File | undefined>();
   const [desktopAvailable, setDesktopAvailable] = useState(false);
   const [desktopProgress, setDesktopProgress] = useState<DesktopExtractionProgress | undefined>();
@@ -127,7 +131,7 @@ export function ReaderScreen() {
 
   const openExtractedDocument = (
     title: string,
-    source: "pdf" | "plain-text",
+    source: "pdf" | "plain-text" | "web",
     document: ReadingDocument,
   ) => {
     setSemanticRegionOverrides({});
@@ -142,6 +146,7 @@ export function ReaderScreen() {
   const importPdf = async (file: File | undefined) => {
     if (file === undefined) return;
     setImportError(undefined);
+    setWebImportStatus(undefined);
     setPreviewPdf(undefined);
     setImportingPdf(true);
     const result = await extractPdfDocument(file, process.env.NEXT_PUBLIC_EXTRACTION_URL);
@@ -155,8 +160,34 @@ export function ReaderScreen() {
     }
   };
 
+  const importWebPage = async () => {
+    if (webUrl.trim() === "") return;
+    setImportError(undefined);
+    setWebImportStatus(undefined);
+    setPreviewPdf(undefined);
+    setImportingWebPage(true);
+    const result = await extractWebPageDocument(webUrl, {
+      remoteReaderPrefix: process.env.NEXT_PUBLIC_WEB_READER_PREFIX,
+    });
+    setImportingWebPage(false);
+    if (result.ok) {
+      setExtraction({ ok: true, document: result.document });
+      setWebUrl(result.url);
+      openExtractedDocument(result.title, "web", result.document);
+      const host = new URL(result.url).hostname;
+      setWebImportStatus(
+        result.extractionMode === "browser"
+          ? `Imported ${result.title} from ${host} using in-browser article extraction.`
+          : `Imported ${result.title} from ${host} through the remote reader fallback.`,
+      );
+    } else {
+      setImportError(result.message);
+    }
+  };
+
   const openNativeDocument = async () => {
     setImportError(undefined);
+    setWebImportStatus(undefined);
     setPreviewPdf(undefined);
     const result = await openDesktopDocument(setDesktopProgress);
     setDesktopProgress(undefined);
@@ -231,13 +262,50 @@ export function ReaderScreen() {
     <main style={{ display: "grid", gap: 24, margin: "auto", maxWidth: 960, minHeight: "100dvh", padding: 24 }}>
       <header>
         <h1>Speedreader</h1>
-        <p>Paste text or import a PDF. Web PDF extraction runs locally in your browser, including OCR for scanned pages.</p>
+        <p>Paste text, import a PDF, or extract the readable content from a web address. PDF OCR stays local; webpage import prefers local parsing and uses a remote reader only when a public site blocks browser access.</p>
       </header>
       {desktopAvailable ? (
         <button type="button" onClick={() => void openNativeDocument()}>
           Open local text or PDF
         </button>
       ) : null}
+      <section
+        aria-labelledby="web-import-heading"
+        style={{ border: "1px solid color-mix(in srgb, currentColor 24%, transparent)", borderRadius: 12, display: "grid", gap: 12, padding: 16 }}
+      >
+        <div>
+          <h2 id="web-import-heading" style={{ marginTop: 0 }}>Read a webpage</h2>
+          <p style={{ marginBottom: 0 }}>
+            Speedreader removes navigation and other page chrome, picks the strongest article/main-content region, and sends the resulting headings and text blocks through the same semantic reading pipeline as extracted documents.
+          </p>
+        </div>
+        <form
+          aria-label="Import web page"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void importWebPage();
+          }}
+          style={{ alignItems: "end", display: "flex", flexWrap: "wrap", gap: 12 }}
+        >
+          <label style={{ display: "grid", flex: "1 1 420px", gap: 8 }}>
+            Web address
+            <input
+              type="text"
+              inputMode="url"
+              autoComplete="url"
+              placeholder="https://example.com/article"
+              value={webUrl}
+              onChange={(event) => setWebUrl(event.target.value)}
+            />
+          </label>
+          <button type="submit" disabled={importingWebPage || webUrl.trim() === ""}>
+            Extract webpage
+          </button>
+        </form>
+        <small>
+          If browser security blocks a public site, Speedreader falls back to Jina Reader by default. Local/private-network URLs are never sent to that fallback; deployments can replace or disable it with NEXT_PUBLIC_WEB_READER_PREFIX.
+        </small>
+      </section>
       <label style={{ display: "grid", gap: 8 }}>
         Source text
         <textarea
@@ -245,6 +313,7 @@ export function ReaderScreen() {
           onChange={(event) => {
             setExtraction(undefined);
             setImportError(undefined);
+            setWebImportStatus(undefined);
             setPreviewPdf(undefined);
             setSemanticRegionOverrides({});
             reader.setText(event.target.value);
@@ -257,10 +326,12 @@ export function ReaderScreen() {
         <input type="file" accept="application/pdf" disabled={importingPdf} onChange={(event) => void importPdf(event.target.files?.[0])} />
       </label>
       {importingPdf ? <p role="status">Extracting PDF locally… Scanned pages may load OCR models on first use.</p> : null}
+      {importingWebPage ? <p role="status">Fetching and cleaning readable webpage content…</p> : null}
+      {webImportStatus !== undefined ? <p role="status">{webImportStatus}</p> : null}
       {desktopProgress !== undefined ? <p role="status">{desktopProgressMessage(desktopProgress)}</p> : null}
       {settingsStatus !== undefined ? <p role="status">{settingsStatus}</p> : null}
       {importError !== undefined ? <p role="status">{importError}</p> : null}
-      {extraction?.ok ? <p role="status">Imported {extraction.document.pages.length} pages.</p> : null}
+      {extraction?.ok && webImportStatus === undefined ? <p role="status">Imported {extraction.document.pages.length} pages.</p> : null}
       {extraction?.ok && hasSemanticMetadata ? (
         <section aria-labelledby="semantic-filters-heading" style={{ display: "grid", gap: 16 }}>
           <div style={{ alignItems: "start", display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "space-between" }}>

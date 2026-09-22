@@ -16,6 +16,7 @@ export default defineConfig({
     command: `bun run dev --hostname 127.0.0.1 --port ${port}`,
     env: {
       NEXT_PUBLIC_EXTRACTION_URL: "/__mock-pdf-extraction",
+      NEXT_PUBLIC_WEB_READER_PREFIX: "",
     },
     reuseExistingServer: false,
     timeout: 120_000,
