@@ -6,9 +6,11 @@
   "exports": {
     ".": "./src/index.ts",
     "./core": "./src/core.ts",
+    "./document": "./src/document.ts",
     "./parity-fixtures": "./src/parity-fixtures.ts",
     "./persistence": "./src/persistence.ts",
     "./react": "./src/react.ts",
+    "./semantic-filter": "./src/semantic-filter.ts",
     "./fixture": "./src/fixture.ts"
   },
   "scripts": {

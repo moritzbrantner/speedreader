@@ -14,7 +14,7 @@ export const readingDocumentVersion = 1 as const;
 export const readerPreferencesVersion = 1 as const;
 export const readingProgressVersion = 1 as const;
 
-export type ReadingDocumentSource = "plain-text" | "pdf";
+export type ReadingDocumentSource = "plain-text" | "pdf" | "web";
 
 export type ReadingDocument = Readonly<{
   version: typeof readingDocumentVersion;
@@ -250,7 +250,7 @@ function isReadingDocument(value: unknown): value is ReadingDocument {
     isNonEmptyString(value.id) &&
     isNonEmptyString(value.title) &&
     typeof value.text === "string" &&
-    (value.source === "plain-text" || value.source === "pdf") &&
+    (value.source === "plain-text" || value.source === "pdf" || value.source === "web") &&
     isNonEmptyString(value.updatedAt)
   );
 }

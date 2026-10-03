@@ -5,4 +5,164 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; background: Canvas; color: CanvasText; }
-button, input, textarea { font: inherit; }
+button, input, select, textarea { font: inherit; }
+
+button,
+input[type="file"]::file-selector-button {
+  background: color-mix(in srgb, CanvasText 8%, Canvas);
+  border: 1px solid color-mix(in srgb, CanvasText 28%, transparent);
+  border-radius: 0.5rem;
+  color: CanvasText;
+  padding: 0.55rem 0.8rem;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+button:hover:not(:disabled),
+input[type="file"]::file-selector-button:hover {
+  background: color-mix(in srgb, CanvasText 14%, Canvas);
+}
+
+button:focus-visible,
+input[type="file"]::file-selector-button:focus-visible {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+input[type="file"]::file-selector-button {
+  cursor: pointer;
+  margin-inline-end: 0.75rem;
+}
+
+.reader-shell {
+  display: grid;
+  gap: 2rem;
+  justify-items: center;
+  padding-block: clamp(1.5rem, 5vh, 3.5rem);
+  text-align: center;
+}
+
+.reader-focus {
+  align-self: end;
+  display: grid;
+  gap: 1rem;
+  justify-items: center;
+  width: min(100%, 46rem);
+}
+
+.reader-chunk {
+  font-size: clamp(2.75rem, 9vw, 6rem);
+  line-height: 1.05;
+  max-width: 100%;
+  min-height: 1.1em;
+  overflow-wrap: anywhere;
+}
+
+.reader-progress {
+  width: min(100%, 32rem);
+}
+
+.reader-position {
+  margin: 0;
+}
+
+.reader-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+  justify-content: center;
+}
+
+.reader-control-button {
+  min-width: 6.25rem;
+}
+
+.reader-play-button {
+  background: color-mix(in srgb, CanvasText 18%, Canvas);
+  font-weight: 650;
+}
+
+.reader-settings {
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 0.75rem;
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+  padding: 1rem 1.25rem 1.25rem;
+  width: min(100%, 34rem);
+}
+
+.reader-settings legend {
+  padding-inline: 0.5rem;
+}
+
+.reader-setting {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+}
+
+.reader-setting > input[type="range"],
+.reader-setting > select {
+  width: min(100%, 24rem);
+}
+
+.source-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.source-section > h2 {
+  margin: 0;
+}
+
+.source-options {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.source-option-card {
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 0.75rem;
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+  padding: 1rem;
+}
+
+.source-option-card h3 {
+  margin: 0;
+}
+
+.source-option-card p {
+  margin-bottom: 0;
+}
+
+.source-option-form,
+.source-option-field,
+.source-text {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.source-option-form {
+  align-content: start;
+}
+
+.source-action-button {
+  justify-self: start;
+}
+
+@media (max-width: 700px) {
+  .source-options {
+    grid-template-columns: 1fr;
+  }
+}

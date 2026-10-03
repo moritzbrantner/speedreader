@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { PdfExtractionAdapter } from "./document-extraction";
+import type { PdfExtractionAdapter, ReadingDocument } from "./document-extraction";
 import { createDocumentImportAdapter, type PickedDocument } from "./document-import";
 
 const unusedPdfExtraction: PdfExtractionAdapter = {
@@ -33,7 +33,25 @@ describe("document import", () => {
     });
   });
 
-  test("routes PDFs through the extraction seam and returns only reader-facing text", async () => {
+  test("routes PDFs through extraction and preserves the canonical document", async () => {
+    const document: ReadingDocument = {
+      version: 1,
+      text: "Recognized PDF words",
+      pages: [{
+        pageNumber: 1,
+        text: "Recognized PDF words",
+        provenance: { kind: "canonicalOcr" },
+        regions: [{
+          sourceLineIndex: 0,
+          text: "Recognized PDF words",
+          role: "content" as const,
+          confidence: 95,
+          evidence: [],
+          includeInReading: true,
+        }],
+      }],
+      diagnostics: [],
+    };
     const adapter = createDocumentImportAdapter({
       picker: {
         async pickDocument() {
@@ -50,15 +68,7 @@ describe("document import", () => {
         async extractPdf(source) {
           expect(source.name).toBe("scan.pdf");
           expect(source.uri).toBe("file:///scan.pdf");
-          return {
-            status: "extracted",
-            document: {
-              version: 1,
-              text: "Recognized PDF words",
-              pages: [{ pageNumber: 1, text: "Recognized PDF words", provenance: { kind: "canonicalOcr" } }],
-              diagnostics: [],
-            },
-          };
+          return { status: "extracted", document };
         },
       },
     });
@@ -69,6 +79,7 @@ describe("document import", () => {
       text: "Recognized PDF words",
       source: "pdf",
       pageCount: 1,
+      document,
     });
   });
 

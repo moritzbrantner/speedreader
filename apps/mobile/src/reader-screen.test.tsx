@@ -66,6 +66,7 @@ mock.module("@moritzbrantner/speed-reading/react", () => ({
       play: () => setIsPlaying(true),
       seek: setChunkIndex,
       setChunkSize,
+      setReadingText: (text: string) => setDocument((current) => ({ ...current, text })),
       setText: (text: string) => setDocument((current) => ({ ...current, text })),
       setWordsPerMinute,
     };
@@ -130,6 +131,65 @@ test("feeds imported text into reader state without exposing transport details t
   expect(byLabel(root, "Native")).toBeDefined();
   expect(root.findAll((node) => node.props.accessibilityLiveRegion === "polite")
     .some((node) => textContent(node).includes("Imported local.txt."))).toBeTrue();
+});
+
+test("keeps PDF semantic regions inspectable and projects role overrides into reading text", async () => {
+  const importer: DocumentImportAdapter = {
+    async importDocument() {
+      return {
+        status: "imported",
+        fileName: "paper.pdf",
+        text: "Body paragraph",
+        source: "pdf",
+        pageCount: 1,
+        document: {
+          version: 1,
+          text: "Body paragraph",
+          diagnostics: [],
+          pages: [{
+            pageNumber: 1,
+            text: "Body paragraph\nRepeated footer",
+            provenance: "embeddedText",
+            regions: [
+              {
+                sourceLineIndex: 0,
+                text: "Body paragraph",
+                role: "content",
+                confidence: 99,
+                evidence: [],
+                includeInReading: true,
+              },
+              {
+                sourceLineIndex: 1,
+                text: "Repeated footer",
+                role: "footer",
+                confidence: 92,
+                evidence: ["bottomMargin", "repeatedAcrossPages"],
+                includeInReading: false,
+              },
+            ],
+          }],
+        },
+      };
+    },
+  };
+  const renderer = renderReader(importer);
+  const root = renderer.root;
+
+  await act(async () => {
+    await byLabel(root, "Import document").props.onPress();
+  });
+
+  expect(byLabel(root, "Semantic filters")).toBeDefined();
+  expect(byLabel(root, "Source text").props.value).toBe("Body paragraph");
+  expect(byLabel(root, "Footer policy default").props.accessibilityState).toEqual({ selected: true });
+
+  await act(async () => {
+    byLabel(root, "Footer policy include").props.onPress();
+  });
+
+  expect(byLabel(root, "Source text").props.value).toBe("Body paragraph\nRepeated footer");
+  expect(byLabel(root, "Footer policy include").props.accessibilityState).toEqual({ selected: true });
 });
 
 function renderReader(documentImporter: DocumentImportAdapter): ReactTestRenderer {

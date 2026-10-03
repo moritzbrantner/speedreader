@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { type ReaderSettings } from "@moritzbrantner/speed-reading/core";
 import { readerFixture } from "@moritzbrantner/speed-reading/fixture";
 import { createReadingDocument } from "@moritzbrantner/speed-reading/persistence";
 import { useDurableSpeedReader } from "@moritzbrantner/speed-reading/react";
@@ -11,12 +12,18 @@ import {
   type ExtractionResult,
   type ReadingDocument,
 } from "./extraction";
+import { extractWebPageDocument } from "./webpage-extraction";
 import {
   isDesktopShell,
   openDesktopDocument,
   type DesktopExtractionProgress,
 } from "./desktop-extraction";
 import { createPlatformReaderPersistence } from "./platform-persistence";
+import { SemanticPagePreviews } from "./semantic-page-previews";
+import {
+  createSpeedreaderSettingsController,
+  type SpeedreaderSettingsController,
+} from "./settings-foundation";
 import {
   projectDocumentText,
   regionIncludedBySemanticFilters,
@@ -40,11 +47,28 @@ export function ReaderScreen() {
   const [extraction, setExtraction] = useState<ExtractionResult | undefined>();
   const [importError, setImportError] = useState<string | undefined>();
   const [importingPdf, setImportingPdf] = useState(false);
+  const [webUrl, setWebUrl] = useState("");
+  const [importingWebPage, setImportingWebPage] = useState(false);
+  const [webImportStatus, setWebImportStatus] = useState<string | undefined>();
+  const [previewPdf, setPreviewPdf] = useState<File | undefined>();
   const [desktopAvailable, setDesktopAvailable] = useState(false);
   const [desktopProgress, setDesktopProgress] = useState<DesktopExtractionProgress | undefined>();
   const [semanticRoleModes, setSemanticRoleModes] = useState<SemanticRoleModes>({});
   const [semanticRegionOverrides, setSemanticRegionOverrides] = useState<SemanticRegionOverrides>({});
+  const [settingsController, setSettingsController] = useState<SpeedreaderSettingsController | undefined>();
+  const [settingsStatus, setSettingsStatus] = useState<string | undefined>();
   const reader = useDurableSpeedReader({ initialDocument, persistence: readerPersistence });
+  const applyReaderSettings = useCallback((settings: ReaderSettings) => {
+    if (reader.settings.wordsPerMinute !== settings.wordsPerMinute) {
+      reader.setWordsPerMinute(settings.wordsPerMinute);
+    }
+    if (reader.settings.chunkSize !== settings.chunkSize) {
+      reader.setChunkSize(settings.chunkSize);
+    }
+    if (reader.settings.segmentation !== settings.segmentation) {
+      reader.setSegmentation(settings.segmentation);
+    }
+  }, [reader]);
   const toggle = useCallback(() => {
     if (reader.isPlaying) reader.pause();
     else reader.play();
@@ -53,6 +77,38 @@ export function ReaderScreen() {
   useEffect(() => {
     setDesktopAvailable(isDesktopShell());
   }, []);
+
+  useEffect(() => {
+    if (!reader.restored) return;
+    let active = true;
+
+    void createSpeedreaderSettingsController(reader.settings)
+      .then((controller) => {
+        if (!active) {
+          controller.dispose();
+          return;
+        }
+        const snapshot = controller.snapshot();
+        setSettingsController(controller);
+        setSettingsStatus(controller.restoreNotice);
+        setSemanticRoleModes(snapshot.semanticRoleModes);
+        applyReaderSettings(snapshot.reader);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setSettingsStatus(
+          error instanceof Error
+            ? `Shared settings are unavailable: ${error.message}`
+            : "Shared settings are unavailable.",
+        );
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [reader.restored]);
+
+  useEffect(() => () => settingsController?.dispose(), [settingsController]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -68,12 +124,16 @@ export function ReaderScreen() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [reader, toggle]);
 
+  const updateReaderSettings = (settings: ReaderSettings) => {
+    const effective = settingsController?.setReaderSettings(settings).reader ?? settings;
+    applyReaderSettings(effective);
+  };
+
   const openExtractedDocument = (
     title: string,
-    source: "pdf" | "plain-text",
+    source: "pdf" | "plain-text" | "web",
     document: ReadingDocument,
   ) => {
-    setSemanticRoleModes({});
     setSemanticRegionOverrides({});
     reader.openDocument(createReadingDocument({
       title,
@@ -86,12 +146,40 @@ export function ReaderScreen() {
   const importPdf = async (file: File | undefined) => {
     if (file === undefined) return;
     setImportError(undefined);
+    setWebImportStatus(undefined);
+    setPreviewPdf(undefined);
     setImportingPdf(true);
     const result = await extractPdfDocument(file, process.env.NEXT_PUBLIC_EXTRACTION_URL);
     setImportingPdf(false);
     if (result.ok) {
       setExtraction(result);
+      setPreviewPdf(file);
       openExtractedDocument(file.name, "pdf", result.document);
+    } else {
+      setImportError(result.message);
+    }
+  };
+
+  const importWebPage = async () => {
+    if (webUrl.trim() === "") return;
+    setImportError(undefined);
+    setWebImportStatus(undefined);
+    setPreviewPdf(undefined);
+    setImportingWebPage(true);
+    const result = await extractWebPageDocument(webUrl, {
+      remoteReaderPrefix: process.env.NEXT_PUBLIC_WEB_READER_PREFIX,
+    });
+    setImportingWebPage(false);
+    if (result.ok) {
+      setExtraction({ ok: true, document: result.document });
+      setWebUrl(result.url);
+      openExtractedDocument(result.title, "web", result.document);
+      const host = new URL(result.url).hostname;
+      setWebImportStatus(
+        result.extractionMode === "browser"
+          ? `Imported ${result.title} from ${host} using in-browser article extraction.`
+          : `Imported ${result.title} from ${host} through the remote reader fallback.`,
+      );
     } else {
       setImportError(result.message);
     }
@@ -99,6 +187,8 @@ export function ReaderScreen() {
 
   const openNativeDocument = async () => {
     setImportError(undefined);
+    setWebImportStatus(undefined);
+    setPreviewPdf(undefined);
     const result = await openDesktopDocument(setDesktopProgress);
     setDesktopProgress(undefined);
     if (result.status === "opened") {
@@ -122,11 +212,17 @@ export function ReaderScreen() {
   };
 
   const updateSemanticRole = (role: DocumentTextRole, mode: SemanticFilterMode) => {
-    const nextRoleModes: Partial<Record<DocumentTextRole, SemanticFilterMode>> = {
-      ...semanticRoleModes,
-    };
-    if (mode === "default") delete nextRoleModes[role];
-    else nextRoleModes[role] = mode;
+    let nextRoleModes: SemanticRoleModes;
+    if (settingsController !== undefined) {
+      nextRoleModes = settingsController.setSemanticRoleMode(role, mode).semanticRoleModes;
+    } else {
+      const fallback: Partial<Record<DocumentTextRole, SemanticFilterMode>> = {
+        ...semanticRoleModes,
+      };
+      if (mode === "default") delete fallback[role];
+      else fallback[role] = mode;
+      nextRoleModes = fallback;
+    }
     setSemanticRoleModes(nextRoleModes);
     applySemanticProjection(nextRoleModes, semanticRegionOverrides);
   };
@@ -145,9 +241,13 @@ export function ReaderScreen() {
   };
 
   const resetSemanticFilters = () => {
-    setSemanticRoleModes({});
+    const nextRoleModes =
+      settingsController?.resetSemanticRoleModes().semanticRoleModes ?? {};
+    setSemanticRoleModes(nextRoleModes);
     setSemanticRegionOverrides({});
-    if (extraction?.ok) reader.setReadingText(extraction.document.text);
+    if (extraction?.ok) {
+      reader.setReadingText(projectDocumentText(extraction.document, nextRoleModes, {}));
+    }
   };
 
   const semanticStats = extraction?.ok
@@ -162,35 +262,154 @@ export function ReaderScreen() {
     <main style={{ display: "grid", gap: 24, margin: "auto", maxWidth: 960, minHeight: "100dvh", padding: 24 }}>
       <header>
         <h1>Speedreader</h1>
-        <p>Paste text or import a PDF. Web PDF extraction runs locally in your browser, including OCR for scanned pages.</p>
+        <p>Paste text, import a PDF, or extract the readable content from a web address. PDF OCR stays local; webpage import prefers local parsing and uses a remote reader only when a public site blocks browser access.</p>
       </header>
-      {desktopAvailable ? (
-        <button type="button" onClick={() => void openNativeDocument()}>
-          Open local text or PDF
-        </button>
-      ) : null}
-      <label style={{ display: "grid", gap: 8 }}>
+      <section aria-label="Reader" className="reader-shell">
+        <div className="reader-focus" data-testid="reader-focus">
+          <output aria-live="polite" className="reader-chunk">
+            {reader.currentChunk?.text ?? "Finished"}
+          </output>
+          <progress
+            aria-label="Reading progress"
+            className="reader-progress"
+            value={reader.progress.chunkIndex}
+            max={reader.progress.totalChunks || 1}
+          />
+          <p className="reader-position">{`${reader.progress.chunkIndex} / ${reader.progress.totalChunks}`}</p>
+          <div className="reader-controls">
+            <button className="reader-control-button" type="button" onClick={() => reader.seek(reader.progress.chunkIndex - 1)}>Previous</button>
+            <button className="reader-control-button reader-play-button" type="button" onClick={toggle}>{reader.isPlaying ? "Pause" : "Play"}</button>
+            <button className="reader-control-button" type="button" onClick={() => reader.seek(reader.progress.chunkIndex + 1)}>Next</button>
+          </div>
+        </div>
+        <fieldset className="reader-settings">
+          <legend>Reading settings</legend>
+          <label className="reader-setting">
+            <span>Words per minute {reader.settings.wordsPerMinute}</span>
+            <input
+              type="range"
+              min="60"
+              max="1200"
+              step="10"
+              value={reader.settings.wordsPerMinute}
+              onChange={(event) =>
+                updateReaderSettings({
+                  ...reader.settings,
+                  wordsPerMinute: Number(event.target.value),
+                })}
+            />
+          </label>
+          <label className="reader-setting">
+            <span>Words per chunk</span>
+            <select
+              value={reader.settings.chunkSize}
+              onChange={(event) =>
+                updateReaderSettings({
+                  ...reader.settings,
+                  chunkSize: Number(event.target.value),
+                })}
+            >
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((size) => (
+                <option key={size} value={size}>{size}</option>
+              ))}
+            </select>
+          </label>
+          <label className="reader-setting">
+            <span>Text segmentation</span>
+            <select
+              value={reader.settings.segmentation}
+              onChange={(event) =>
+                updateReaderSettings({
+                  ...reader.settings,
+                  segmentation: event.target.value as ReaderSettings["segmentation"],
+                })}
+            >
+              <option value="whitespace">Whitespace</option>
+              <option value="punctuation">Punctuation-aware</option>
+            </select>
+          </label>
+        </fieldset>
+      </section>
+      <section aria-labelledby="source-options-heading" className="source-section">
+        <h2 id="source-options-heading">Choose a source</h2>
+        <div className="source-options" data-testid="source-options">
+          <section aria-labelledby="web-import-heading" className="source-option-card">
+            <div>
+              <h3 id="web-import-heading">Read a webpage</h3>
+              <p>
+                Paste a public web address. Speedreader extracts the main readable content and removes page chrome.
+              </p>
+            </div>
+            <form
+              aria-label="Import web page"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void importWebPage();
+              }}
+              className="source-option-form"
+            >
+              <label className="source-option-field">
+                Web address
+                <input
+                  type="text"
+                  inputMode="url"
+                  autoComplete="url"
+                  placeholder="https://example.com/article"
+                  value={webUrl}
+                  onChange={(event) => setWebUrl(event.target.value)}
+                />
+              </label>
+              <button className="source-action-button" type="submit" disabled={importingWebPage || webUrl.trim() === ""}>
+                Extract webpage
+              </button>
+            </form>
+          </section>
+          <section aria-labelledby="pdf-import-heading" className="source-option-card">
+            <div>
+              <h3 id="pdf-import-heading">Read a PDF</h3>
+              <p>
+                Select a PDF. Text extraction and OCR stay local before the document enters the reading pipeline.
+              </p>
+            </div>
+            <label className="source-option-field">
+              Import PDF
+              <input
+                type="file"
+                accept="application/pdf"
+                disabled={importingPdf}
+                onChange={(event) => void importPdf(event.target.files?.[0])}
+              />
+            </label>
+            {desktopAvailable ? (
+              <button className="source-action-button" type="button" onClick={() => void openNativeDocument()}>
+                Open local text or PDF
+              </button>
+            ) : null}
+          </section>
+        </div>
+      </section>
+      <label className="source-text">
         Source text
         <textarea
           value={reader.document.text}
           onChange={(event) => {
             setExtraction(undefined);
             setImportError(undefined);
-            setSemanticRoleModes({});
+            setWebImportStatus(undefined);
+            setPreviewPdf(undefined);
             setSemanticRegionOverrides({});
             reader.setText(event.target.value);
           }}
           rows={8}
         />
       </label>
-      <label>
-        Import PDF
-        <input type="file" accept="application/pdf" disabled={importingPdf} onChange={(event) => void importPdf(event.target.files?.[0])} />
-      </label>
       {importingPdf ? <p role="status">Extracting PDF locally… Scanned pages may load OCR models on first use.</p> : null}
+      {importingWebPage ? <p role="status">Fetching and cleaning readable webpage content…</p> : null}
+      {webImportStatus !== undefined ? <p role="status">{webImportStatus}</p> : null}
       {desktopProgress !== undefined ? <p role="status">{desktopProgressMessage(desktopProgress)}</p> : null}
+      {settingsStatus !== undefined ? <p role="status">{settingsStatus}</p> : null}
       {importError !== undefined ? <p role="status">{importError}</p> : null}
-      {extraction?.ok ? <p role="status">Imported {extraction.document.pages.length} pages.</p> : null}
+      {extraction?.ok && webImportStatus === undefined ? <p role="status">Imported {extraction.document.pages.length} pages.</p> : null}
       {extraction?.ok && hasSemanticMetadata ? (
         <section aria-labelledby="semantic-filters-heading" style={{ display: "grid", gap: 16 }}>
           <div style={{ alignItems: "start", display: "flex", flexWrap: "wrap", gap: 12, justifyContent: "space-between" }}>
@@ -204,6 +423,14 @@ export function ReaderScreen() {
               Reset filters
             </button>
           </div>
+          {previewPdf === undefined ? null : (
+            <SemanticPagePreviews
+              file={previewPdf}
+              document={extraction.document}
+              roleModes={semanticRoleModes}
+              regionOverrides={semanticRegionOverrides}
+            />
+          )}
           <div style={{ overflowX: "auto" }}>
             <table style={{ borderCollapse: "collapse", minWidth: 640, width: "100%" }}>
               <thead>
@@ -282,28 +509,6 @@ export function ReaderScreen() {
           ) : null}
         </section>
       ) : null}
-      <section aria-label="Reader" style={{ display: "grid", gap: 16, textAlign: "center" }}>
-        <output aria-live="polite" style={{ fontSize: "clamp(2rem, 8vw, 5rem)", minHeight: "1.2em" }}>
-          {reader.currentChunk?.text ?? "Finished"}
-        </output>
-        <progress value={reader.progress.chunkIndex} max={reader.progress.totalChunks || 1} />
-        <p>{`${reader.progress.chunkIndex} / ${reader.progress.totalChunks}`}</p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
-          <button type="button" onClick={() => reader.seek(reader.progress.chunkIndex - 1)}>Previous</button>
-          <button type="button" onClick={toggle}>{reader.isPlaying ? "Pause" : "Play"}</button>
-          <button type="button" onClick={() => reader.seek(reader.progress.chunkIndex + 1)}>Next</button>
-        </div>
-        <label>
-          Words per minute {reader.settings.wordsPerMinute}
-          <input type="range" min="60" max="900" step="10" value={reader.settings.wordsPerMinute} onChange={(event) => reader.setWordsPerMinute(Number(event.target.value))} />
-        </label>
-        <label>
-          Words per chunk
-          <select value={reader.settings.chunkSize} onChange={(event) => reader.setChunkSize(Number(event.target.value))}>
-            {[1, 2, 3, 4].map((size) => <option key={size} value={size}>{size}</option>)}
-          </select>
-        </label>
-      </section>
     </main>
   );
 }

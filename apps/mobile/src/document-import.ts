@@ -1,3 +1,4 @@
+import type { ReadingDocument } from "./document-extraction";
 import type { PdfExtractionAdapter } from "./document-extraction";
 
 export const supportedDocumentMimeTypes = [
@@ -22,8 +23,15 @@ export type DocumentImportResult =
       status: "imported";
       fileName: string;
       text: string;
-      source: "plain-text" | "pdf";
-      pageCount?: number;
+      source: "plain-text";
+    }>
+  | Readonly<{
+      status: "imported";
+      fileName: string;
+      text: string;
+      source: "pdf";
+      pageCount: number;
+      document: ReadingDocument;
     }>
   | Readonly<{ status: "error"; message: string }>;
 
@@ -74,6 +82,7 @@ export function createDocumentImportAdapter(
           text: extraction.document.text,
           source: "pdf",
           pageCount: extraction.document.pages.length,
+          document: extraction.document,
         };
       }
 
