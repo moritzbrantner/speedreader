@@ -13,14 +13,44 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: github-pages
-  cancel-in-progress: true
+# Concurrency is job-level on purpose: runs that are skipped (failed CI,
+# stale commits) never acquire the deployment slots, so they cannot cancel
+# a deployment of the current main tip.
 
 jobs:
+  gate:
+    name: Confirm source is the current main tip
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      deploy: ${{ steps.tip.outputs.deploy }}
+    steps:
+      - name: Compare CI head with main
+        id: tip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          tip=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)
+          if [[ "$tip" == "$HEAD_SHA" ]]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Skipping stale CI completion for $HEAD_SHA; main is at $tip."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
   browser-runtime:
     name: Reuse validated browser runtime
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    needs: gate
+    if: ${{ needs.gate.outputs.deploy == 'true' }}
     permissions:
       actions: read
       contents: read
@@ -58,6 +88,9 @@ jobs:
     name: Compose Pages from verified browser runtime
     needs: browser-runtime
     runs-on: ubuntu-latest
+    concurrency:
+      group: github-pages-build
+      cancel-in-progress: true
     permissions:
       actions: read
       contents: read
@@ -115,6 +148,9 @@ jobs:
     name: Deploy Pages
     needs: build
     runs-on: ubuntu-latest
+    concurrency:
+      group: github-pages-deploy
+      cancel-in-progress: false
     permissions:
       pages: write
       id-token: write
