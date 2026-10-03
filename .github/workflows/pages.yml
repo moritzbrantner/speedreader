@@ -25,7 +25,7 @@ jobs:
       actions: read
       contents: read
       packages: read
-    uses: moritzbrantner/reusable-workflows/.github/workflows/build-artifact.yml@c3ffc400a479e8574dc299b81fe9ce44f71dd53f
+    uses: moritzbrantner/reusable-workflows/.github/workflows/build-artifact.yml@b14fb03c3d775c682b92a49954e4d6f43aa9e281
     with:
       source_sha: ${{ github.event.workflow_run.head_sha || github.sha }}
       artifact_key: speedreader-browser-runtime-v1
@@ -49,7 +49,6 @@ jobs:
         cp -R apps/web/public/pdfjs .artifacts/browser-runtime/pdfjs
       artifact_paths: .artifacts/browser-runtime
       reuse_across_runs: true
-      expected_consumers: 2
       artifact_retention_days: 7
       timeout_minutes: 30
 
@@ -76,7 +75,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Consume verified browser runtime
-        uses: moritzbrantner/reusable-workflows/.github/actions/consume-build-artifact@c3ffc400a479e8574dc299b81fe9ce44f71dd53f
+        uses: moritzbrantner/reusable-workflows/.github/actions/consume-build-artifact@b14fb03c3d775c682b92a49954e4d6f43aa9e281
         with:
           producer_run_id: ${{ needs.browser-runtime.outputs.producer_run_id }}
           receipt_artifact_name: ${{ needs.browser-runtime.outputs.receipt_artifact_name }}
