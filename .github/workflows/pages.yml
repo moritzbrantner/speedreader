@@ -28,7 +28,7 @@ jobs:
     uses: moritzbrantner/reusable-workflows/.github/workflows/build-artifact.yml@b14fb03c3d775c682b92a49954e4d6f43aa9e281
     with:
       source_sha: ${{ github.event.workflow_run.head_sha || github.sha }}
-      artifact_key: speedreader-browser-runtime-v1
+      artifact_key: speedreader-browser-runtime-v2
       bun_version: "1.4.0"
       rust_toolchain: "1.98.1"
       rust_targets: wasm32-unknown-unknown
@@ -47,6 +47,8 @@ jobs:
         mkdir -p .artifacts/browser-runtime
         cp -R apps/web/public/wasm .artifacts/browser-runtime/wasm
         cp -R apps/web/public/pdfjs .artifacts/browser-runtime/pdfjs
+        mkdir -p .artifacts/browser-runtime/vendor
+        cp -R apps/web/public/vendor/settings .artifacts/browser-runtime/vendor/settings
       artifact_paths: .artifacts/browser-runtime
       reuse_across_runs: true
       artifact_retention_days: 7
@@ -89,10 +91,11 @@ jobs:
 
       - name: Stage browser runtime
         run: |
-          rm -rf apps/web/public/wasm apps/web/public/pdfjs
-          mkdir -p apps/web/public
+          rm -rf apps/web/public/wasm apps/web/public/pdfjs apps/web/public/vendor/settings
+          mkdir -p apps/web/public/vendor
           cp -R .artifacts/verified-browser-runtime/wasm apps/web/public/wasm
           cp -R .artifacts/verified-browser-runtime/pdfjs apps/web/public/pdfjs
+          cp -R .artifacts/verified-browser-runtime/vendor/settings apps/web/public/vendor/settings
 
       - name: Build static web app
         env:
