@@ -36,10 +36,12 @@ import {
 
 import type { DocumentImportAdapter, DocumentImportResult } from "./document-import";
 import { readerLayoutMode } from "./reader-layout";
+import type { WebPageImportAdapter } from "./webpage-import";
 
 type ReaderScreenProps = Readonly<{
   documentImporter: DocumentImportAdapter;
   persistence?: ReaderPersistence;
+  webPageImporter: WebPageImportAdapter;
 }>;
 
 type ImportState =
@@ -83,8 +85,13 @@ const initialDocument = createReadingDocument({
   updatedAt: "1970-01-01T00:00:00.000Z",
 });
 
-export function ReaderScreen({ documentImporter, persistence }: ReaderScreenProps) {
+export function ReaderScreen({
+  documentImporter,
+  persistence,
+  webPageImporter,
+}: ReaderScreenProps) {
   const [importState, setImportState] = useState<ImportState>({ status: "idle" });
+  const [webUrl, setWebUrl] = useState("");
   const [semanticDocument, setSemanticDocument] = useState<ReadingDocument | undefined>();
   const [semanticRoleModes, setSemanticRoleModes] = useState<SemanticRoleModes>({});
   const [semanticRegionOverrides, setSemanticRegionOverrides] = useState<SemanticRegionOverrides>({});
@@ -108,7 +115,7 @@ export function ReaderScreen({ documentImporter, persistence }: ReaderScreenProp
 
     setSemanticRoleModes({});
     setSemanticRegionOverrides({});
-    setSemanticDocument(result.source === "pdf" ? result.document : undefined);
+    setSemanticDocument("document" in result ? result.document : undefined);
     reader.openDocument(createReadingDocument({
       title: result.fileName,
       text: result.text,
@@ -117,6 +124,31 @@ export function ReaderScreen({ documentImporter, persistence }: ReaderScreenProp
     }));
     setImportState({ status: "success", message: importMessage(result) });
   }, [documentImporter, reader]);
+
+  const importWebPage = useCallback(async () => {
+    if (webUrl.trim() === "") return;
+    setImportState({ status: "importing" });
+    const result = await webPageImporter.importWebPage(webUrl);
+    if (!result.ok) {
+      setImportState({ status: "error", message: result.message });
+      return;
+    }
+
+    setSemanticRoleModes({});
+    setSemanticRegionOverrides({});
+    setSemanticDocument(result.document);
+    setWebUrl(result.url);
+    reader.openDocument(createReadingDocument({
+      title: result.title,
+      text: result.document.text,
+      source: "web",
+      updatedAt: new Date().toISOString(),
+    }));
+    setImportState({
+      status: "success",
+      message: "Imported " + result.title + ".",
+    });
+  }, [reader, webPageImporter, webUrl]);
 
   const applySemanticProjection = (
     roleModes: SemanticRoleModes,
@@ -182,7 +214,60 @@ export function ReaderScreen({ documentImporter, persistence }: ReaderScreenProp
                 Speedreader
               </Text>
               <Text style={[styles.introduction, { color: theme.textMuted }]}>
-                Paste text and read entirely offline, or import a local text, Markdown, or PDF file.
+                Paste text, import a local document, or extract the readable text from a public webpage.
+              </Text>
+            </View>
+
+            <View
+              accessibilityLabel="Import web page"
+              style={[
+                styles.webImportCard,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+              ]}
+            >
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Read a webpage</Text>
+              <Text style={[styles.webHint, { color: theme.textMuted }]}>
+                The configured reader service fetches the public page, removes navigation and other page chrome, and returns semantic text regions for speed reading.
+              </Text>
+              <TextInput
+                accessibilityLabel="Web address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                onChangeText={setWebUrl}
+                placeholder="https://example.com/article"
+                placeholderTextColor={theme.textMuted}
+                style={[
+                  styles.webInput,
+                  {
+                    backgroundColor: theme.background,
+                    borderColor: theme.border,
+                    color: theme.text,
+                  },
+                ]}
+                value={webUrl}
+              />
+              <Pressable
+                accessibilityLabel="Extract webpage"
+                accessibilityRole="button"
+                accessibilityState={{
+                  disabled: importState.status === "importing" || webUrl.trim() === "",
+                }}
+                disabled={importState.status === "importing" || webUrl.trim() === ""}
+                onPress={importWebPage}
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  { backgroundColor: theme.action },
+                  (importState.status === "importing" || webUrl.trim() === "") && styles.disabled,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <Text style={[styles.primaryButtonText, { color: theme.actionText }]}>
+                  {importState.status === "importing" ? "Extracting…" : "Extract webpage"}
+                </Text>
+              </Pressable>
+              <Text style={[styles.webDisclosure, { color: theme.textMuted }]}>
+                Public URLs are sent to the configured webpage reader service. Local and private-network addresses are rejected.
               </Text>
             </View>
 
@@ -212,7 +297,7 @@ export function ReaderScreen({ documentImporter, persistence }: ReaderScreenProp
             <View style={styles.inputGroup}>
               <Text style={[styles.label, { color: theme.text }]}>Source text</Text>
               <TextInput
-                accessibilityHint="Editing the text resets reading progress and PDF semantic filters"
+                accessibilityHint="Editing the text resets reading progress and semantic filters"
                 accessibilityLabel="Source text"
                 multiline
                 onChangeText={updateSourceText}
@@ -305,7 +390,7 @@ function SemanticFiltersPanel({
         <View style={styles.semanticHeaderCopy}>
           <Text style={[styles.sectionTitle, { color: theme.text }]}>Semantic filters</Text>
           <Text style={[styles.semanticDescription, { color: theme.textMuted }]}>
-            Inspect extracted roles and change only the reading projection. The original PDF regions remain intact.
+            Inspect extracted roles and change only the reading projection. The original extracted regions remain intact.
           </Text>
         </View>
         <Pressable
@@ -693,6 +778,22 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: { fontSize: 16, fontWeight: "700" },
   status: { fontSize: 14, lineHeight: 20 },
+  webImportCard: {
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    gap: 10,
+    padding: 14,
+  },
+  webHint: { fontSize: 14, lineHeight: 20 },
+  webInput: {
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    fontSize: 16,
+    minHeight: 48,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  webDisclosure: { fontSize: 12, lineHeight: 17 },
   inputGroup: { flex: 1, gap: 8 },
   label: { fontSize: 15, fontWeight: "700" },
   textInput: {
