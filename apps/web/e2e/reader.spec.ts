@@ -38,6 +38,91 @@ test("reads pasted plain text without contacting the extraction service", async 
   expect(extractionRequests).toBe(0);
 });
 
+test("keeps the centered reader above side-by-side source choices", async ({ page }) => {
+  await page.goto("/");
+
+  const reader = page.getByRole("region", { name: "Reader" });
+  const focus = reader.getByTestId("reader-focus");
+  const settings = reader.getByRole("group", { name: "Reading settings" });
+  const sources = page.getByTestId("source-options");
+  const webSource = page.getByRole("region", { name: "Read a webpage" });
+  const pdfSource = page.getByRole("region", { name: "Read a PDF" });
+  const viewport = page.viewportSize();
+  const focusBox = await focus.boundingBox();
+  const settingsBox = await settings.boundingBox();
+  const sourcesBox = await sources.boundingBox();
+  const webBox = await webSource.boundingBox();
+  const pdfBox = await pdfSource.boundingBox();
+  const previousBox = await reader.getByRole("button", { name: "Previous" }).boundingBox();
+  const playBox = await reader.getByRole("button", { name: "Play" }).boundingBox();
+  const nextBox = await reader.getByRole("button", { name: "Next" }).boundingBox();
+  const webActionBox = await page.getByRole("button", { name: "Extract webpage" }).boundingBox();
+
+  expect(viewport).not.toBeNull();
+  expect(focusBox).not.toBeNull();
+  expect(settingsBox).not.toBeNull();
+  expect(sourcesBox).not.toBeNull();
+  expect(webBox).not.toBeNull();
+  expect(pdfBox).not.toBeNull();
+  expect(previousBox).not.toBeNull();
+  expect(playBox).not.toBeNull();
+  expect(nextBox).not.toBeNull();
+  expect(webActionBox).not.toBeNull();
+  if (
+    viewport === null ||
+    focusBox === null ||
+    settingsBox === null ||
+    sourcesBox === null ||
+    webBox === null ||
+    pdfBox === null ||
+    previousBox === null ||
+    playBox === null ||
+    nextBox === null ||
+    webActionBox === null
+  ) return;
+
+  const focusCenter = focusBox.x + focusBox.width / 2;
+  expect(Math.abs(focusCenter - viewport.width / 2)).toBeLessThan(24);
+  expect(settingsBox.y).toBeGreaterThanOrEqual(focusBox.y + focusBox.height);
+  expect(sourcesBox.y).toBeGreaterThanOrEqual(settingsBox.y + settingsBox.height);
+  expect(Math.abs(webBox.y - pdfBox.y)).toBeLessThan(4);
+  expect(webBox.x + webBox.width).toBeLessThanOrEqual(pdfBox.x);
+  expect(Math.abs(previousBox.y - playBox.y)).toBeLessThan(4);
+  expect(Math.abs(playBox.y - nextBox.y)).toBeLessThan(4);
+  expect(previousBox.width).toBeLessThan(160);
+  expect(playBox.width).toBeLessThan(160);
+  expect(nextBox.width).toBeLessThan(160);
+  expect(webActionBox.width).toBeLessThan(webBox.width * 0.75);
+});
+
+test("keeps long unbroken chunks inside the centered reader on narrow screens", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  await page.goto("/");
+
+  const longChunk = `https://example.com/${"verylongsegment".repeat(16)}`;
+  await page.getByLabel("Source text").fill(longChunk);
+
+  const reader = page.getByRole("region", { name: "Reader" });
+  const focus = reader.getByTestId("reader-focus");
+  const chunk = reader.getByRole("status");
+  await expect(chunk).toHaveText(longChunk);
+
+  const focusBox = await focus.boundingBox();
+  const chunkBox = await chunk.boundingBox();
+  expect(focusBox).not.toBeNull();
+  expect(chunkBox).not.toBeNull();
+  if (focusBox === null || chunkBox === null) return;
+
+  expect(chunkBox.x).toBeGreaterThanOrEqual(focusBox.x - 1);
+  expect(chunkBox.x + chunkBox.width).toBeLessThanOrEqual(focusBox.x + focusBox.width + 1);
+
+  const widths = await page.evaluate(() => ({
+    client: document.documentElement.clientWidth,
+    scroll: document.documentElement.scrollWidth,
+  }));
+  expect(widths.scroll).toBeLessThanOrEqual(widths.client);
+});
+
 test("feeds a mocked PDF reading document into the reader", async ({ page }) => {
   const extractedText = "Extracted words enter reader";
   await page.route(extractionPath, async (route) => {
