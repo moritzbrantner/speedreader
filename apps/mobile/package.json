@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@moritzbrantner/speed-reading": "workspace:*",
+    "@speedreader/webpage-extraction": "workspace:*",
     "expo": "^53.0.0",
     "expo-constants": "~17.1.8",
     "expo-dev-client": "~5.2.4",
