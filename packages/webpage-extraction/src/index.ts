@@ -260,7 +260,7 @@ export function isSafeForRemoteReader(url: URL): boolean {
       || hostname.startsWith("::ffff:")
       || hostname.startsWith("fc")
       || hostname.startsWith("fd")
-      || hostname.startsWith("fe80:")
+      || /^fe[89ab][0-9a-f]:/.test(hostname)
     );
   }
   const octets = hostname.split(".").map(Number);
