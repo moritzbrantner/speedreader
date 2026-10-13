@@ -71,5 +71,12 @@ Speedreader's owner-approved product direction. This answers **what the product 
 
 ## 2. Document library
 
-- [ ] **2.1** [question] What should happen to imported documents after a reading session?
-  Beyond preserving the current reading position, should Speedreader present only a short list of recent documents, provide a persistent searchable library for saved documents, or primarily treat imports as one-off sessions with no permanent library? Existing code has recent-document persistence, but implementation alone is not an owner-approved product choice. The core reading workflow remains usable without accounts or a backend.
+- [x] **2.1** [question] What should happen to imported documents after a reading session?
+  Beyond preserving the current reading position, should Speedreader present only a short list of recent documents, provide a persistent searchable library for saved documents, or primarily treat imports as one-off sessions with no permanent library? Existing code has recent-document persistence, but implementation alone is not an owner-approved product choice. The core reading workflow remains usable without accounts or a backend. Answered by 2.2.
+
+- [x] **2.2** Provide a persistent, searchable personal document library.
+  Answers 2.1 (owner selected B).
+  Readers can keep documents in a personal library beyond the most recent reading sessions, find saved documents through search, organize their collection, remove documents they no longer want, and reopen any saved document with its own remembered reading progress. This applies to supported reading inputs such as pasted text, PDFs and webpages and complements the synchronized reading views in Section 1. Library contents and progress persist across application restarts on the device and must remain usable without an account or cloud service. Do not impose the current limited recent-document history as the intended library size. How imports become saved library items and the specific organization interaction remain product choices to refine; do not infer these from existing persistence code. This is approved product direction, not proof that library browsing, search, organization or removal already works.
+
+- [ ] **2.3** [question] When should an imported document be saved to the personal library?
+  Should all successfully imported documents be added automatically, should readers explicitly choose Save to Library, or should a user preference control automatic saving? Regardless of this choice, a one-off reading session must remain usable when durable storage is unavailable, and saved documents must support removal under Decision 2.2.
