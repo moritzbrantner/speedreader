@@ -92,5 +92,12 @@ Speedreader's owner-approved product direction. This answers **what the product 
   Answers 2.5 (owner selected B).
   Readers can create and manage their own tags, assign one or more tags to a saved document, remove or change a document's tags, and find documents by filtering on tags. The same document can appear under multiple tags without being duplicated or losing its identity or per-document reading progress. Tags are the primary organization mechanism; do not require a folder hierarchy. Untagged documents must remain accessible in the library, and deleting or changing a tag must not delete its documents. Reuse the persistent personal library from Decision 2.2 and the automatic-save behavior from Decision 2.4. No automatic tagging, hierarchical tagging scheme or particular storage implementation is mandated.
 
-- [ ] **2.7** [question] What should the personal library's search cover?
-  Should library search match document titles and assigned tags only, or also find words and phrases inside the saved documents' content? Both options preserve tag filtering, document identity and saved progress under Decisions 2.2 and 2.6.
+- [x] **2.7** [question] What should the personal library's search cover?
+  Should library search match document titles and assigned tags only, or also find words and phrases inside the saved documents' content? Both options preserve tag filtering, document identity and saved progress under Decisions 2.2 and 2.6. Answered by 2.8.
+
+- [x] **2.8** Search document titles, tags and saved document content.
+  Answers 2.7 (owner selected B).
+  The personal library supports searching the titles and assigned tags of saved documents as well as words and phrases occurring anywhere in their saved readable text. A matching document must be discoverable even when the search terms do not appear in its title or tags, while tag-based filtering from Decision 2.6 remains available. Searches use locally saved documents without requiring a cloud account, upload or repeated remote import, and search must not silently discard documents because they exceed the original ten-item recent history. A search result identifies the corresponding saved document without modifying its reading position or progress merely because it matched. The interaction for opening a match is still a product choice in Question 2.9. This Decision establishes product behavior, not a particular search index, ranking algorithm, external provider or claim of implementation.
+
+- [ ] **2.9** [question] What should happen when a reader opens a full-text search match?
+  Should the app show the matching passage in full-document mode without changing saved reading progress, jump the active reading position directly to the match, or open at the last saved reading position with matches available separately? Decisions 1.11 and 1.13 already require paused playback and explicit confirmation before changing the focused-reading position in document mode.
