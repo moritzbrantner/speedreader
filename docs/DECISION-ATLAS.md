@@ -69,6 +69,10 @@ Speedreader's owner-approved product direction. This answers **what the product 
   Answers 1.16 (owner selected A).
   For new readers who have not chosen a different post-confirmation destination, pressing "Continue from here" commits the explicitly selected passage and switches to focused speed-reading at that position, **paused** and ready for an explicit Play action. Readers can change the persistent preference defined by Decision 1.15 to remain in full-document mode instead. Neither option automatically plays, resets progress, nor loses the shared document position under Decisions 1.11 and 1.13.
 
+
+- [ ] **1.18** [question] How should "Continue from here" handle a passage excluded from focused speed-reading?
+  A document or library search may navigate to a footnote, sidebar, or other source region that Decisions 1.7 and 1.9 keep accessible in full-document mode but omit from focused playback. If the reader selects that passage and presses "Continue from here", should confirmation include the selected passage through an explicit inclusion override, offer a clearly indicated nearby included position, or leave confirmation unavailable with an explanation until the reader selects an included passage? Decisions 1.13 and 2.10 do not authorize automatically changing inclusion, choosing an unrelated chunk, or claiming an unmappable source span has a corresponding focus position. Until the owner answers this Question, document inspection remains available and a missing/unmappable focused position must not silently change committed progress.
+
 ## 2. Document library
 
 - [x] **2.1** [question] What should happen to imported documents after a reading session?
@@ -104,7 +108,7 @@ Speedreader's owner-approved product direction. This answers **what the product 
 
 - [x] **2.10** Open full-text search matches in document context without moving reading progress.
   Answers 2.9 (owner selected A).
-  When a reader opens a search result matching text inside a saved document, open that document in its full-document reading view at the matching passage and make the match recognizable in context. This is navigation for inspection, not a change of the committed focused speed-reading position or its saved progress. Playback remains paused. Scrolling or inspecting further matches never silently seeks the focused reader; starting focused reading at a match requires explicitly selecting that passage and confirming "Continue from here" under Decision 1.13, followed by a separate Play action under Decision 1.11. Respect the clean/original document layout availability in Decision 1.3 and do not pretend an unavailable source location is an exact match. Reopening for normal reading must still offer access to the original saved progress.
+  When a reader opens a search result matching text inside a saved document, open that document in its full-document reading view at the matching passage and make the match recognizable in context. This is navigation for inspection, not a change of the committed focused speed-reading position or its saved progress. Playback remains paused. Scrolling or inspecting further matches never silently seeks the focused reader; starting focused reading at a match requires explicitly selecting that passage and confirming "Continue from here" under Decision 1.13, followed by a separate Play action under Decision 1.11. Respect the clean/original document layout availability in Decision 1.3 and do not pretend an unavailable source location is an exact match. Reopening for normal reading must still offer access to the original saved progress. For a search match deliberately excluded from focused playback, the confirmation outcome remains Question 1.18; do not silently include or mis-map the match.
 
 ## 3. Web app layout and navigation
 
