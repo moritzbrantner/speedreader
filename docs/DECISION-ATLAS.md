@@ -85,5 +85,12 @@ Speedreader's owner-approved product direction. This answers **what the product 
   Answers 2.3 (owner selected A).
   After a successful import or explicit opening of a supported document for reading, save that document to the persistent personal library automatically. Readers do not have to press an extra "Save to Library" button or enable an opt-in setting before saved documents can be found again. Saved documents remain searchable, organizable and removable, with their own reading progress, as established by Decision 2.2. A failed import must not be presented as successfully saved; inability to persist must be communicated honestly while allowing the immediate reading session to continue where possible. This includes PDFs, webpages and documents opened from plain text, without treating each keystroke in an editable text field as a new document import. The user did not mandate cloud accounts, synchronous uploads, an exact library storage schema, a deduplication algorithm, or a specific organization UI.
 
-- [ ] **2.5** [question] How should readers organize their saved document library?
-  Should documents be organized primarily in folders, with flexible tags, or with both folders and tags? Each option retains the approved searchable library and per-document progress; the repository should not infer a specific organization model from its existing recent-documents implementation.
+- [x] **2.5** [question] How should readers organize their saved document library?
+  Should documents be organized primarily in folders, with flexible tags, or with both folders and tags? Each option retains the approved searchable library and per-document progress; the repository should not infer a specific organization model from its existing recent-documents implementation. Answered by 2.6.
+
+- [x] **2.6** Organize the personal document library using tags.
+  Answers 2.5 (owner selected B).
+  Readers can create and manage their own tags, assign one or more tags to a saved document, remove or change a document's tags, and find documents by filtering on tags. The same document can appear under multiple tags without being duplicated or losing its identity or per-document reading progress. Tags are the primary organization mechanism; do not require a folder hierarchy. Untagged documents must remain accessible in the library, and deleting or changing a tag must not delete its documents. Reuse the persistent personal library from Decision 2.2 and the automatic-save behavior from Decision 2.4. No automatic tagging, hierarchical tagging scheme or particular storage implementation is mandated.
+
+- [ ] **2.7** [question] What should the personal library's search cover?
+  Should library search match document titles and assigned tags only, or also find words and phrases inside the saved documents' content? Both options preserve tag filtering, document identity and saved progress under Decisions 2.2 and 2.6.
