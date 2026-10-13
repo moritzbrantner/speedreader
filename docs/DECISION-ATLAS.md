@@ -62,5 +62,14 @@ Speedreader's owner-approved product direction. This answers **what the product 
   Answers 1.14 (owner selected C).
   Provide a user-controlled, persistent preference for what happens after the reader confirms a different passage using "Continue from here": either switch immediately to focused speed-reading at the confirmed passage or remain in the full-document view with the new position visibly indicated. Both outcomes commit the same logical reading position, preserve the same document identity, and keep playback paused until the reader explicitly presses Play (Decision 1.11). Switching between clean/original layouts does not override the chosen preference. This is a behavior preference, not another confirmation prompt or an instruction to introduce a parallel reader. The initial default preference is not yet owner-approved and is Question 1.16.
 
-- [ ] **1.16** [question] What is the default post-confirmation view for new readers?
-  Under Decision 1.15 both outcomes are configurable, but which should be the initial preference: switch to focused speed-reading (paused, ready for Play), or stay in the full-document reading view (with the confirmed position highlighted)? Choosing the default does not remove either option or permit automatic playback.
+- [x] **1.16** [question] What is the default post-confirmation view for new readers?
+  Under Decision 1.15 both outcomes are configurable, but which should be the initial preference: switch to focused speed-reading (paused, ready for Play), or stay in the full-document reading view (with the confirmed position highlighted)? Choosing the default does not remove either option or permit automatic playback. Answered by 1.17.
+
+- [x] **1.17** Default to the paused focused view after "Continue from here".
+  Answers 1.16 (owner selected A).
+  For new readers who have not chosen a different post-confirmation destination, pressing "Continue from here" commits the explicitly selected passage and switches to focused speed-reading at that position, **paused** and ready for an explicit Play action. Readers can change the persistent preference defined by Decision 1.15 to remain in full-document mode instead. Neither option automatically plays, resets progress, nor loses the shared document position under Decisions 1.11 and 1.13.
+
+## 2. Document library
+
+- [ ] **2.1** [question] What should happen to imported documents after a reading session?
+  Beyond preserving the current reading position, should Speedreader present only a short list of recent documents, provide a persistent searchable library for saved documents, or primarily treat imports as one-off sessions with no permanent library? Existing code has recent-document persistence, but implementation alone is not an owner-approved product choice. The core reading workflow remains usable without accounts or a backend.
