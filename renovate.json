@@ -1,4 +1,12 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>moritzbrantner/coding-agent-conventions"]
+  "extends": ["github>moritzbrantner/coding-agent-conventions"],
+  "packageRules": [
+    {
+      "description": "visual-analysis crates share types across one git revision; a partial bump compiles two incompatible copies, so update them as one cohort.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["/^moenarch-image-analysis-/", "/^moenarch-video-analysis-/", "image-analysis-core", "image-analysis-ocr", "video-analysis-core"],
+      "groupName": "visual-analysis crates"
+    }
+  ]
 }
