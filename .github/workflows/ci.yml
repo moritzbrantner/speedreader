@@ -108,3 +108,14 @@ jobs:
 
       - name: Run CI without recompiling browser runtime
         run: bun run ci:prepared
+
+  merge-ready:
+    name: merge-ready
+    if: ${{ always() }}
+    needs: ["browser-runtime", "verify"]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: moritzbrantner/reusable-workflows/.github/actions/merge-ready@b0f25f241d76af2584dfc9e375084ff5c5cb97da
+        with:
+          needs: ${{ toJSON(needs) }}
+          required: '["browser-runtime", "verify"]'
