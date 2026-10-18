@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 lopdf = "0.38.0"
 moenarch-image-analysis-ocr = { git = "https://github.com/moritzbrantner/visual-analysis", rev = "9630ccba6945f4e90d9bf4ab2f267cbe2de57de5", optional = true }
-semantic-core = { package = "moenarch-semantic-core", git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "b7533cd02269124deece75b76477ca55a853cd77" }
+semantic-core = { package = "moenarch-semantic-core", git = "https://github.com/moritzbrantner/moenarch-foundation", rev = "8255347717ca7b8943ede7c435d0c468e5a107c5" }
 serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 
