@@ -2524,11 +2524,23 @@ dependencies = [
 [[package]]
 name = "moenarch-image-analysis-core"
 version = "0.1.0"
+source = "git+https://github.com/moritzbrantner/visual-analysis?rev=35a53204cea66e7f438b962afe23b6cef1de0004#35a53204cea66e7f438b962afe23b6cef1de0004"
+dependencies = [
+ "moenarch-runtime-core",
+ "moenarch-tensor-data",
+ "moenarch-video-analysis-core 0.1.3 (git+https://github.com/moritzbrantner/visual-analysis?rev=35a53204cea66e7f438b962afe23b6cef1de0004)",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "moenarch-image-analysis-core"
+version = "0.1.0"
 source = "git+https://github.com/moritzbrantner/visual-analysis?rev=9630ccba6945f4e90d9bf4ab2f267cbe2de57de5#9630ccba6945f4e90d9bf4ab2f267cbe2de57de5"
 dependencies = [
  "moenarch-runtime-core",
  "moenarch-tensor-data",
- "moenarch-video-analysis-core",
+ "moenarch-video-analysis-core 0.1.3 (git+https://github.com/moritzbrantner/visual-analysis?rev=9630ccba6945f4e90d9bf4ab2f267cbe2de57de5)",
  "serde",
  "serde_json",
 ]
@@ -2539,9 +2551,9 @@ version = "0.1.0"
 source = "git+https://github.com/moritzbrantner/visual-analysis?rev=9630ccba6945f4e90d9bf4ab2f267cbe2de57de5#9630ccba6945f4e90d9bf4ab2f267cbe2de57de5"
 dependencies = [
  "image",
- "moenarch-image-analysis-core",
+ "moenarch-image-analysis-core 0.1.0 (git+https://github.com/moritzbrantner/visual-analysis?rev=9630ccba6945f4e90d9bf4ab2f267cbe2de57de5)",
  "moenarch-runtime-core",
- "moenarch-video-analysis-core",
+ "moenarch-video-analysis-core 0.1.3 (git+https://github.com/moritzbrantner/visual-analysis?rev=9630ccba6945f4e90d9bf4ab2f267cbe2de57de5)",
  "serde",
  "serde_json",
 ]
@@ -2551,14 +2563,14 @@ name = "moenarch-image-analysis-ocr"
 version = "0.1.0"
 source = "git+https://github.com/moritzbrantner/visual-analysis?rev=9630ccba6945f4e90d9bf4ab2f267cbe2de57de5#9630ccba6945f4e90d9bf4ab2f267cbe2de57de5"
 dependencies = [
- "moenarch-image-analysis-core",
+ "moenarch-image-analysis-core 0.1.0 (git+https://github.com/moritzbrantner/visual-analysis?rev=9630ccba6945f4e90d9bf4ab2f267cbe2de57de5)",
  "moenarch-image-analysis-io",
  "moenarch-image-analysis-processing",
  "moenarch-model-runtime",
  "moenarch-runtime-core",
  "moenarch-runtime-onnx",
  "moenarch-text-core",
- "moenarch-video-analysis-core",
+ "moenarch-video-analysis-core 0.1.3 (git+https://github.com/moritzbrantner/visual-analysis?rev=9630ccba6945f4e90d9bf4ab2f267cbe2de57de5)",
  "serde",
  "serde_json",
  "tempfile",
@@ -2571,11 +2583,11 @@ version = "0.1.0"
 source = "git+https://github.com/moritzbrantner/visual-analysis?rev=9630ccba6945f4e90d9bf4ab2f267cbe2de57de5#9630ccba6945f4e90d9bf4ab2f267cbe2de57de5"
 dependencies = [
  "image",
- "moenarch-image-analysis-core",
+ "moenarch-image-analysis-core 0.1.0 (git+https://github.com/moritzbrantner/visual-analysis?rev=9630ccba6945f4e90d9bf4ab2f267cbe2de57de5)",
  "moenarch-math-geometry-2d",
  "moenarch-math-linear",
  "moenarch-runtime-core",
- "moenarch-video-analysis-core",
+ "moenarch-video-analysis-core 0.1.3 (git+https://github.com/moritzbrantner/visual-analysis?rev=9630ccba6945f4e90d9bf4ab2f267cbe2de57de5)",
  "serde",
  "serde_json",
 ]
@@ -2664,7 +2676,7 @@ dependencies = [
 [[package]]
 name = "moenarch-semantic-core"
 version = "0.1.0"
-source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=b7533cd02269124deece75b76477ca55a853cd77#b7533cd02269124deece75b76477ca55a853cd77"
+source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=8255347717ca7b8943ede7c435d0c468e5a107c5#8255347717ca7b8943ede7c435d0c468e5a107c5"
 dependencies = [
  "serde",
  "sha2",
@@ -2705,6 +2717,23 @@ checksum = "de15a4cd8baa74e92cb2a262f7bebc44889402d8a480a73da59ce8e5e1b352f5"
 dependencies = [
  "moenarch-media-core",
  "moenarch-runtime-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "moenarch-video-analysis-core"
+version = "0.1.3"
+source = "git+https://github.com/moritzbrantner/visual-analysis?rev=35a53204cea66e7f438b962afe23b6cef1de0004#35a53204cea66e7f438b962afe23b6cef1de0004"
+dependencies = [
+ "moenarch-audio-contracts",
+ "moenarch-math-geometry-2d",
+ "moenarch-media-core",
+ "moenarch-runtime-core",
+ "moenarch-text-core",
+ "num-rational",
+ "num-traits",
+ "scenedetect-core",
  "serde",
  "serde_json",
 ]
@@ -4204,9 +4233,9 @@ version = "0.0.0"
 dependencies = [
  "document-extraction",
  "hayro",
- "moenarch-image-analysis-core",
+ "moenarch-image-analysis-core 0.1.0 (git+https://github.com/moritzbrantner/visual-analysis?rev=35a53204cea66e7f438b962afe23b6cef1de0004)",
  "moenarch-image-analysis-ocr",
- "moenarch-video-analysis-core",
+ "moenarch-video-analysis-core 0.1.3 (git+https://github.com/moritzbrantner/visual-analysis?rev=9630ccba6945f4e90d9bf4ab2f267cbe2de57de5)",
  "serde",
  "tauri",
  "tauri-build",

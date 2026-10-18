@@ -9,7 +9,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 document-extraction = { path = "../../../crates/document-extraction" }
 hayro = "0.7.1"
-image-analysis-core = { package = "moenarch-image-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "9630ccba6945f4e90d9bf4ab2f267cbe2de57de5" }
+image-analysis-core = { package = "moenarch-image-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "35a53204cea66e7f438b962afe23b6cef1de0004" }
 image-analysis-ocr = { package = "moenarch-image-analysis-ocr", git = "https://github.com/moritzbrantner/visual-analysis", rev = "9630ccba6945f4e90d9bf4ab2f267cbe2de57de5", features = ["local-onnx"] }
 serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = [] }
