@@ -27,6 +27,17 @@
         "digest"
       ],
       "groupName": "git-pinned crate revisions"
+    },
+    {
+      "description": "The Expo SDK fixes React Native and its native modules to one tested set; move them with `bunx expo install --fix` during an SDK upgrade instead of independently.",
+      "matchFileNames": [
+        "apps/mobile/**"
+      ],
+      "matchPackageNames": [
+        "react-native",
+        "/^react-native-/"
+      ],
+      "enabled": false
     }
   ],
   "platformAutomerge": true
