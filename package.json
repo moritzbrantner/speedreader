@@ -1,7 +1,7 @@
 {
   "name": "speedreader",
   "private": true,
-  "packageManager": "bun@1.4.0",
+  "packageManager": "bun@1.4.3",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "22.20.5",
-    "turbo": "2.11.7",
+    "turbo": "2.11.9",
     "typescript": "5.9.3"
   }
 }
