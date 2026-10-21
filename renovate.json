@@ -1,6 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>moritzbrantner/coding-agent-conventions"],
+  "extends": [
+    "github>moritzbrantner/coding-agent-conventions"
+  ],
   "packageRules": [
     {
       "description": "visual-analysis crates share types across one git revision; a partial bump compiles two incompatible copies, so update them as one cohort.",
@@ -15,6 +17,16 @@
         "video-analysis-core"
       ],
       "groupName": "visual-analysis crates"
+    },
+    {
+      "description": "Crates from one git repository must move together; single-crate digest bumps split the graph across revisions.",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchUpdateTypes": [
+        "digest"
+      ],
+      "groupName": "git-pinned crate revisions"
     }
   ],
   "platformAutomerge": true
