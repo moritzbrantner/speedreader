@@ -38,6 +38,30 @@
         "/^react-native-/"
       ],
       "enabled": false
+    },
+    {
+      "description": "getrandom_02/getrandom_03 are feature-only aliases that enable the wasm backends of the 0.2 and 0.3 copies pulled in transitively; they must stay on their own majors.",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchDepNames": [
+        "getrandom_02",
+        "getrandom_03"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "document-extraction-wasm hands an rten::Model to ocrs, so rten must stay on the rten version ocrs depends on; bump it together with an ocrs release that moves rten.",
+      "matchManagers": [
+        "cargo"
+      ],
+      "matchFileNames": [
+        "crates/document-extraction-wasm/Cargo.toml"
+      ],
+      "matchPackageNames": [
+        "rten"
+      ],
+      "enabled": false
     }
   ],
   "platformAutomerge": true
