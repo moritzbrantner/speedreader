@@ -2614,7 +2614,7 @@ dependencies = [
 [[package]]
 name = "moenarch-image-analysis-core"
 version = "0.1.0"
-source = "git+https://github.com/moritzbrantner/visual-analysis?rev=936e2c481a6a53c80d6620d702dbcc273d797171#936e2c481a6a53c80d6620d702dbcc273d797171"
+source = "git+https://github.com/moritzbrantner/visual-analysis?rev=a5d6c6f765ce7dac569fd190c7f9a75ae54cc776#a5d6c6f765ce7dac569fd190c7f9a75ae54cc776"
 dependencies = [
  "moenarch-runtime-core",
  "moenarch-tensor-data",
@@ -2626,7 +2626,7 @@ dependencies = [
 [[package]]
 name = "moenarch-image-analysis-io"
 version = "0.1.0"
-source = "git+https://github.com/moritzbrantner/visual-analysis?rev=936e2c481a6a53c80d6620d702dbcc273d797171#936e2c481a6a53c80d6620d702dbcc273d797171"
+source = "git+https://github.com/moritzbrantner/visual-analysis?rev=a5d6c6f765ce7dac569fd190c7f9a75ae54cc776#a5d6c6f765ce7dac569fd190c7f9a75ae54cc776"
 dependencies = [
  "image",
  "moenarch-image-analysis-core",
@@ -2639,7 +2639,7 @@ dependencies = [
 [[package]]
 name = "moenarch-image-analysis-ocr"
 version = "0.1.0"
-source = "git+https://github.com/moritzbrantner/visual-analysis?rev=936e2c481a6a53c80d6620d702dbcc273d797171#936e2c481a6a53c80d6620d702dbcc273d797171"
+source = "git+https://github.com/moritzbrantner/visual-analysis?rev=a5d6c6f765ce7dac569fd190c7f9a75ae54cc776#a5d6c6f765ce7dac569fd190c7f9a75ae54cc776"
 dependencies = [
  "moenarch-image-analysis-core",
  "moenarch-image-analysis-io",
@@ -2658,7 +2658,7 @@ dependencies = [
 [[package]]
 name = "moenarch-image-analysis-processing"
 version = "0.1.0"
-source = "git+https://github.com/moritzbrantner/visual-analysis?rev=936e2c481a6a53c80d6620d702dbcc273d797171#936e2c481a6a53c80d6620d702dbcc273d797171"
+source = "git+https://github.com/moritzbrantner/visual-analysis?rev=a5d6c6f765ce7dac569fd190c7f9a75ae54cc776#a5d6c6f765ce7dac569fd190c7f9a75ae54cc776"
 dependencies = [
  "image",
  "moenarch-image-analysis-core",
@@ -2754,7 +2754,7 @@ dependencies = [
 [[package]]
 name = "moenarch-semantic-core"
 version = "0.1.0"
-source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=d5c0d8ff8989cde41e7754deba78d4f6493d60f6#d5c0d8ff8989cde41e7754deba78d4f6493d60f6"
+source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=b8a8daed4f98fff7194ec5f2debdd75d30b58c5a#b8a8daed4f98fff7194ec5f2debdd75d30b58c5a"
 dependencies = [
  "serde",
  "sha2 0.11.1",
@@ -2802,7 +2802,7 @@ dependencies = [
 [[package]]
 name = "moenarch-video-analysis-core"
 version = "0.1.3"
-source = "git+https://github.com/moritzbrantner/visual-analysis?rev=936e2c481a6a53c80d6620d702dbcc273d797171#936e2c481a6a53c80d6620d702dbcc273d797171"
+source = "git+https://github.com/moritzbrantner/visual-analysis?rev=a5d6c6f765ce7dac569fd190c7f9a75ae54cc776#a5d6c6f765ce7dac569fd190c7f9a75ae54cc776"
 dependencies = [
  "moenarch-audio-contracts",
  "moenarch-math-geometry-2d",
