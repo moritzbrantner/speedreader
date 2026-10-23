@@ -11,7 +11,7 @@ SETTINGS_SOURCE_COMMIT="4aff7dc2dbfcae0e245269bd3fe50f6afb8e19e8"
 SETTINGS_RAW_BASE="https://raw.githubusercontent.com/moritzbrantner/settings/${SETTINGS_BROWSER_DIST_COMMIT}"
 
 if ! command -v wasm-bindgen >/dev/null 2>&1; then
-  echo "wasm-bindgen CLI is required (expected 0.2.127)." >&2
+  echo "wasm-bindgen CLI is required (expected 0.2.129)." >&2
   exit 1
 fi
 
