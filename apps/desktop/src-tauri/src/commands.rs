@@ -6,7 +6,7 @@ use document_extraction::{
 };
 use hayro::{
     hayro_interpret::InterpreterSettings, hayro_syntax::Pdf, render,
-    vello_cpu::color::palette::css::WHITE, RenderCache, RenderSettings,
+    vello_cpu::color::palette::css::WHITE, PixmapSettings, RenderCache, RenderSettings,
 };
 use image_analysis_core::{ImagePixelFormat, ImageView, OwnedImage};
 use image_analysis_ocr::{
@@ -232,11 +232,11 @@ impl<P: ProgressReporter> CanonicalOcr for LocalPdfOcr<'_, P> {
             page,
             &RenderCache::new(),
             &InterpreterSettings::default(),
-            &RenderSettings {
+            &RenderSettings::default(),
+            &PixmapSettings {
                 x_scale: 2.0,
                 y_scale: 2.0,
                 bg_color: WHITE,
-                ..RenderSettings::default()
             },
         );
         let rgb = pixmap
