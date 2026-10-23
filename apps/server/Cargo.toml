@@ -6,6 +6,6 @@ edition = "2021"
 [dependencies]
 axum = "0.8"
 document-extraction = { path = "../../crates/document-extraction" }
-image-analysis-ocr = { package = "moenarch-image-analysis-ocr", git = "https://github.com/moritzbrantner/visual-analysis", rev = "7eb2898f23b491a857fe227d9773d49c2b320ddf" }
+image-analysis-ocr = { package = "moenarch-image-analysis-ocr", git = "https://github.com/moritzbrantner/visual-analysis", rev = "936e2c481a6a53c80d6620d702dbcc273d797171" }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
