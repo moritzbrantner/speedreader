@@ -23,7 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "22.20.5",
-    "turbo": "2.11.9",
+    "turbo": "2.11.10",
     "typescript": "5.9.3"
   }
 }
