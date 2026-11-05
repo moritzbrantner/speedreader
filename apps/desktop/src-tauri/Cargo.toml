@@ -9,9 +9,9 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 document-extraction = { path = "../../../crates/document-extraction" }
 hayro = "0.9.0"
-image-analysis-core = { package = "moenarch-image-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "be782cee52506785b46e2c471a003f879508275b" }
-image-analysis-ocr = { package = "moenarch-image-analysis-ocr", git = "https://github.com/moritzbrantner/visual-analysis", rev = "be782cee52506785b46e2c471a003f879508275b", features = ["local-onnx"] }
+image-analysis-core = { package = "moenarch-image-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "ef820b3c0f0b0c5306274f484c1d26582bd655c4" }
+image-analysis-ocr = { package = "moenarch-image-analysis-ocr", git = "https://github.com/moritzbrantner/visual-analysis", rev = "ef820b3c0f0b0c5306274f484c1d26582bd655c4", features = ["local-onnx"] }
 serde = { version = "1", features = ["derive"] }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
-video-analysis-core = { package = "moenarch-video-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "be782cee52506785b46e2c471a003f879508275b" }
+video-analysis-core = { package = "moenarch-video-analysis-core", git = "https://github.com/moritzbrantner/visual-analysis", rev = "ef820b3c0f0b0c5306274f484c1d26582bd655c4" }
