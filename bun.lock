@@ -40,7 +40,7 @@
       "devDependencies": {
         "@types/react": "19.3.0",
         "@types/react-test-renderer": "19.3.1",
-        "bun-types": "1.4.4",
+        "bun-types": "1.4.5",
         "react-test-renderer": "19.3.1",
         "typescript": "5.9.3",
       },
@@ -60,7 +60,7 @@
         "@playwright/test": "1.65.1",
         "@types/react": "19.3.0",
         "@types/react-dom": "19.3.0",
-        "bun-types": "1.4.4",
+        "bun-types": "1.4.5",
       },
     },
     "packages/speed-reading": {
@@ -69,7 +69,7 @@
       "devDependencies": {
         "@types/react": "19.3.0",
         "@types/react-test-renderer": "19.3.1",
-        "bun-types": "1.4.4",
+        "bun-types": "1.4.5",
         "react": "19.3.1",
         "react-test-renderer": "19.3.1",
       },
@@ -84,7 +84,7 @@
         "@moritzbrantner/speed-reading": "workspace:*",
       },
       "devDependencies": {
-        "bun-types": "1.4.4",
+        "bun-types": "1.4.5",
         "typescript": "5.9.3",
       },
     },
@@ -670,7 +670,7 @@
 
     "buffer-from": ["buffer-from@1.1.2", "", {}, "sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ=="],
 
-    "bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
+    "bun-types": ["bun-types@1.4.5", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-ECHn+9dhL3wv0G6u0+7dQvrnaimXiRDxxerYBmhTaLyJEEuvTPWk2Fye3XIf5Y++JIIiHKfQw4Z7V5D8KuiXbg=="],
 
     "bytes": ["bytes@3.1.2", "", {}, "sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg=="],
 
