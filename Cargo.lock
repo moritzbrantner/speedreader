@@ -1345,7 +1345,7 @@ dependencies = [
 [[package]]
 name = "moenarch-semantic-core"
 version = "0.1.0"
-source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=ad52d0ad160850cd10321558debe67b01b7214b3#ad52d0ad160850cd10321558debe67b01b7214b3"
+source = "git+https://github.com/moritzbrantner/moenarch-foundation?rev=f94b852f408131250149901e432a51a30f098869#f94b852f408131250149901e432a51a30f098869"
 dependencies = [
  "serde",
  "sha2 0.11.1",
