@@ -38,7 +38,7 @@
         "react-native-screens": "~4.11.1",
       },
       "devDependencies": {
-        "@types/react": "19.3.0",
+        "@types/react": "19.3.1",
         "@types/react-test-renderer": "19.3.1",
         "bun-types": "1.4.5",
         "react-test-renderer": "19.3.1",
@@ -58,7 +58,7 @@
       },
       "devDependencies": {
         "@playwright/test": "1.65.1",
-        "@types/react": "19.3.0",
+        "@types/react": "19.3.1",
         "@types/react-dom": "19.3.0",
         "bun-types": "1.4.5",
       },
@@ -67,7 +67,7 @@
       "name": "@moritzbrantner/speed-reading",
       "version": "0.0.0",
       "devDependencies": {
-        "@types/react": "19.3.0",
+        "@types/react": "19.3.1",
         "@types/react-test-renderer": "19.3.1",
         "bun-types": "1.4.5",
         "react": "19.3.1",
@@ -572,7 +572,7 @@
 
     "@types/node": ["@types/node@22.20.5", "", { "dependencies": { "undici-types": "~6.21.0" } }, "sha512-U2+DNr+wSjpsTS/wZGYHq7GcwfuSmKiKvoPvK22zwTlRhU91yOniN4qRR5KhIjvif7ysw/dz/hKmfDH0Ris4aA=="],
 
-    "@types/react": ["@types/react@19.3.0", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-N0rFCuH9YoxG9/m61l9MfpJKfmLOVU0em7ipIz6TRgSSkvReLB9vL85GB+yr8Bs5leqpvg96JSwF4ZS1s4viQg=="],
+    "@types/react": ["@types/react@19.3.1", "", { "dependencies": { "csstype": "^3.2.2" } }, "sha512-HNTkBIm8zmHX8LUXX2vtZ/ONzehrV1J3abl2fUIiZ5qxTYRCj/z+rDeFwOltqCLl9lRdUTKWT41OLtYuFV/Arg=="],
 
     "@types/react-dom": ["@types/react-dom@19.3.0", "", { "peerDependencies": { "@types/react": "^19.3.0" } }, "sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q=="],
 
